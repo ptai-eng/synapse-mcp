@@ -3,7 +3,8 @@
   <p><strong>A Modern, High-Performance, Header-Only C++20 SDK for Model Context Protocol</strong></p>
 
   <p>
-    <a href="https://github.com/ptai-eng/synapse-mcp"><img src="https://img.shields.io/badge/version-0.1.0-blue.svg?style=flat-square" alt="Version 0.1.0"></a>
+    <a href="https://github.com/ptai-eng/synapse-mcp/actions"><img src="https://img.shields.io/github/actions/workflow/status/ptai-eng/synapse-mcp/ci.yml?branch=feature/initial-sdk&logo=github&style=flat-square" alt="Build Status"></a>
+    <a href="https://github.com/ptai-eng/synapse-mcp/stargazers"><img src="https://img.shields.io/github/stars/ptai-eng/synapse-mcp?style=flat-square&color=yellow" alt="Stars"></a>
     <a href="https://github.com/ptai-eng/synapse-mcp/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
     <a href="https://isocpp.org/"><img src="https://img.shields.io/badge/C%2B%2B-20-blue.svg?style=flat-square&logo=c%2B%2B" alt="C++20"></a>
   </p>
