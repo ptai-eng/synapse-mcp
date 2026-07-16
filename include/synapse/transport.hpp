@@ -5,6 +5,8 @@
 #include <functional>
 #include <thread>
 #include <mutex>
+#include <atomic>
+#include <stop_token>
 #include <nlohmann/json.hpp>
 #include "protocol.hpp"
 
