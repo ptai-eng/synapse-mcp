@@ -1,75 +1,41 @@
-# Synapse MCP (C++)
+<div align="center">
+  <h1>Synapse MCP</h1>
+  <p><strong>A Modern, High-Performance, Header-Only C++20 SDK for Model Context Protocol</strong></p>
 
-[![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-**Synapse MCP** is a modern, lightweight, header-only **C++23** SDK for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). It empowers **C++** applications to expose local tools, resources, and system functionality directly to LLM Agents (like Claude Desktop, Cursor, and Gemini) with near-zero overhead.
+  <p>
+    <a href="https://github.com/ptai-eng/synapse-mcp/actions"><img src="https://img.shields.io/github/actions/workflow/status/ptai-eng/synapse-mcp/ci.yml?branch=main&logo=github&style=flat-square" alt="Build Status"></a>
+    <a href="https://github.com/ptai-eng/synapse-mcp/releases"><img src="https://img.shields.io/github/v/release/ptai-eng/synapse-mcp?style=flat-square" alt="Release"></a>
+    <a href="https://github.com/ptai-eng/synapse-mcp/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
+    <a href="https://isocpp.org/"><img src="https://img.shields.io/badge/C%2B%2B-20-blue.svg?style=flat-square&logo=c%2B%2B" alt="C++20"></a>
+  </p>
+</div>
 
 ---
 
-## Highlights
+**Synapse MCP** is a lightweight, ultra-fast, and deeply integrated **C++20 header-only** library designed to help developers build **Model Context Protocol (MCP)** servers and clients with zero friction. Built strictly on modern **C++** paradigms, it leverages `std::expected` and modern standard library features to provide maximum safety without compromising on the bare-metal performance that **C++** developers expect.
 
-* **Header-only:** Just copy the `include/` folder or use CMake `FetchContent`. No static/dynamic linking or build-system headaches.
-* **Modern C++ Design:** Leverages C++23 `std::expected` for elegant, exception-free functional error handling, and `std::jthread` for leak-free background I/O.
-* **Minimalist Dependencies:** Built solely on top of the industry-standard `nlohmann/json`. No heavy frameworks like Boost or custom networking engines.
-* **Non-blocking STDIO Transport:** Lightning-fast JSON-RPC 2.0 communication over Standard I/O—the exact transport required for local desktop MCP integrations.
-* **Expressive API:** Exposing C++ business logic feels natural. Register tools and resources using simple C++ lambdas.
+## 🚀 Why Synapse MCP?
 
-## Usage Example
+Inspired by the design philosophies of industry standards like [spdlog](https://github.com/gabime/spdlog) and [abseil](https://github.com/abseil/abseil-cpp):
 
-Writing an MCP server should be effortless. Here is a complete example of exposing a C++ function as a tool to an AI agent:
+* **Header-only:** Just drop the `include/` folder into your project and you're ready to go. No complex build steps or linking headaches.
+* **Modern C++20/23:** Utilizes the latest language features (`std::expected`, `std::variant`, `std::optional`) for expressive, safe, and clean code.
+* **Zero Overhead Abstractions:** Designed for latency-critical applications where every CPU cycle counts.
+* **Dependency Light:** Uses only `nlohmann/json` for robust JSON-RPC 2.0 serialization. 
 
-```cpp
-#include <synapse/mcp.hpp>
-#include <iostream>
+## 📦 Installation
 
-int main() {
-    // Initialize the server over standard input/output (STDIO)
-    synapse::server server;
+Since Synapse MCP is header-only, installation is trivial.
 
-    // 1. Register a Tool
-    server.register_tool(
-        "calculate_hash",
-        "Calculates the SHA-256 hash of a given string",
-        synapse::schema{
-            {"type", "object"},
-            {"properties", {
-                {"text", {{"type", "string"}, {"description", "The input text"}}}
-            }},
-            {"required", nlohmann::json::array({"text"})}
-        },
-        [](const nlohmann::json& args) -> std::expected<nlohmann::json, synapse::error> {
-            try {
-                std::string text = args.at("text").get<std::string>();
-                std::string hash = compute_sha256(text); // User logic
-                return nlohmann::json{{"hash", hash}};
-            } catch (const std::exception& e) {
-                return std::unexpected(synapse::error{synapse::error_code::invalid_params, e.what()});
-            }
-        }
-    );
+### Option 1: CMake FetchContent (Recommended)
 
-    // 2. Start the server (non-blocking std::jthread)
-    server.start();
-    
-    // 3. Wait for shutdown or EOF on stdin
-    server.wait();
-    return 0;
-}
-```
-
-## Integration
-
-### Using CMake `FetchContent` (Recommended)
-
-The easiest way to integrate Synapse MCP is via CMake. It will automatically download the library and its `nlohmann/json` dependency.
+Add this to your `CMakeLists.txt`:
 
 ```cmake
 include(FetchContent)
-
 FetchContent_Declare(
     synapse_mcp
-    GIT_REPOSITORY https://github.com/your-username/synapse-mcp.git
+    GIT_REPOSITORY https://github.com/ptai-eng/synapse-mcp.git
     GIT_TAG main
 )
 FetchContent_MakeAvailable(synapse_mcp)
@@ -78,16 +44,58 @@ add_executable(my_server main.cpp)
 target_link_libraries(my_server PRIVATE synapse::mcp)
 ```
 
-### As a Header-Only Library
+### Option 2: Copy-Paste
 
-If you prefer not to use CMake's FetchContent, you can simply drop the `include/synapse` directory into your project's include path. You will just need to ensure that you also provide `nlohmann/json`.
+1. Copy the `include/synapse` directory into your project's include path.
+2. Ensure you have `nlohmann/json` available in your project.
 
-## Requirements
+## 🛠️ Quick Start
 
-* A **C++23** compatible compiler (GCC 13+, Clang 16+, MSVC 19.36+)
-* **CMake 3.20+** (if using the build system)
-* **nlohmann/json 3.11+**
+Building an MCP server in modern **C++** is now just a few lines of code:
 
-## License
+```cpp
+#include <synapse/mcp.hpp>
+#include <iostream>
 
-Synapse MCP is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+int main() {
+    // 1. Initialize the STDIO transport layer
+    auto transport = std::make_shared<synapse::stdio_transport>();
+    
+    // 2. Create the MCP Server instance
+    synapse::server mcp_server(transport);
+    
+    // 3. Register a tool
+    mcp_server.register_tool(
+        "calculate_hash",
+        "Computes a dummy SHA-256 hash for a given input string.",
+        R"({
+            "type": "object",
+            "properties": {
+                "input": { "type": "string" }
+            },
+            "required": ["input"]
+        })"_json,
+        [](const nlohmann::json& args) -> std::expected<nlohmann::json, synapse::error_code> {
+            std::string input = args["input"];
+            return nlohmann::json{{"hash", "dummy-hash-" + input}};
+        }
+    );
+    
+    // 4. Start listening for incoming requests
+    transport->start();
+    
+    return 0;
+}
+```
+
+## 📚 Documentation
+
+Detailed documentation on handling Prompts, Resources, and advanced Transport layers (like SSE or WebSockets) is coming soon in the `docs/` folder.
+
+## 🤝 Contributing
+
+We welcome contributions! Whether it's adding new transport layers, improving documentation, or fixing bugs, please feel free to open an issue or submit a Pull Request.
+
+## 📄 License
+
+Synapse MCP is distributed under the MIT License. See `LICENSE` for more information.
