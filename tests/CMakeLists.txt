@@ -8,4 +8,4 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(synapse_tests main.cpp)
 target_link_libraries(synapse_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
-catch_discover_tests(synapse_tests)
+add_test(NAME synapse_tests COMMAND synapse_tests)
