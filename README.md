@@ -13,7 +13,7 @@
 
 **Synapse MCP** is a lightweight, ultra-fast, and deeply integrated **C++20 header-only** library designed to help developers build **Model Context Protocol (MCP)** servers and clients with zero friction. Built strictly on modern **C++** paradigms, it leverages `std::expected` and modern standard library features to provide maximum safety without compromising on the bare-metal performance that **C++** developers expect.
 
-## 🚀 Why Synapse MCP?
+##  Why Synapse MCP?
 
 Inspired by the design philosophies of industry standards like [spdlog](https://github.com/gabime/spdlog) and [abseil](https://github.com/abseil/abseil-cpp):
 
@@ -22,7 +22,7 @@ Inspired by the design philosophies of industry standards like [spdlog](https://
 * **Zero Overhead Abstractions:** Designed for latency-critical applications where every CPU cycle counts.
 * **Dependency Light:** Uses only `nlohmann/json` for robust JSON-RPC 2.0 serialization. 
 
-## 📦 Installation
+##  Installation
 
 Since Synapse MCP is header-only, installation is trivial.
 
@@ -48,7 +48,7 @@ target_link_libraries(my_server PRIVATE synapse::mcp)
 1. Copy the `include/synapse` directory into your project's include path.
 2. Ensure you have `nlohmann/json` available in your project.
 
-## 🛠️ Quick Start
+##  Quick Start
 
 Building an MCP server in modern **C++** is now just a few lines of code:
 
@@ -87,11 +87,11 @@ int main() {
 }
 ```
 
-## 📚 Documentation
+##  Documentation
 
 Detailed documentation on handling Prompts, Resources, and advanced Transport layers (like SSE or WebSockets) is coming soon in the `docs/` folder.
 
-## 🤝 Contributing
+##  Contributing
 
 We welcome contributions! Whether it's adding new transport layers, improving documentation, or fixing bugs, please feel free to open an issue or submit a Pull Request.
 
