@@ -5,6 +5,9 @@
 #include <optional>
 #include <variant>
 #include <type_traits>
+#include <cstdint>
+#include <cstddef>
+#include <utility>
 #include <nlohmann/json.hpp>
 
 namespace synapse {
