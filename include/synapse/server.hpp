@@ -22,7 +22,8 @@ public:
         std::string version = "0.1.0";
     };
 
-    server(server_info info = {}) : info_(std::move(info)) {}
+    server() = default;
+    explicit server(server_info info) : info_(std::move(info)) {}
 
     void register_tool(std::string name, std::string description, schema inputSchema, tool_callback callback) {
         tools_[name] = {
