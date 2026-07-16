@@ -95,6 +95,6 @@ Detailed documentation on handling Prompts, Resources, and advanced Transport la
 
 We welcome contributions! Whether it's adding new transport layers, improving documentation, or fixing bugs, please feel free to open an issue or submit a Pull Request.
 
-## 📄 License
+##  License
 
 Synapse MCP is distributed under the MIT License. See `LICENSE` for more information.
