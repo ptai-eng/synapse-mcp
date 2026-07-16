@@ -4,6 +4,7 @@
 
   <p>
     <a href="https://github.com/ptai-eng/synapse-mcp"><img src="https://img.shields.io/badge/version-0.1.0-blue.svg?style=flat-square" alt="Version 0.1.0"></a>
+    <a href="https://github.com/ptai-eng/synapse-mcp/actions/workflows/ci.yml"><img src="https://github.com/ptai-eng/synapse-mcp/actions/workflows/ci.yml/badge.svg?style=flat-square" alt="CI Status"></a>
     <a href="https://github.com/ptai-eng/synapse-mcp/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
     <a href="https://isocpp.org/"><img src="https://img.shields.io/badge/C%2B%2B-20-blue.svg?style=flat-square&logo=c%2B%2B" alt="C++20"></a>
   </p>
