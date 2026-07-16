@@ -1,9 +1,9 @@
-# Synapse MCP
+# Synapse MCP (C++)
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Synapse MCP** is a modern, lightweight, header-only C++23 SDK for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). It empowers C++ applications to expose local tools, resources, and system functionality directly to LLM Agents (like Claude Desktop, Cursor, and Gemini) with near-zero overhead.
+**Synapse MCP** is a modern, lightweight, header-only **C++23** SDK for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). It empowers **C++** applications to expose local tools, resources, and system functionality directly to LLM Agents (like Claude Desktop, Cursor, and Gemini) with near-zero overhead.
 
 ---
 
