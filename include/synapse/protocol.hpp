@@ -4,7 +4,7 @@
 #include <vector>
 #include <optional>
 #include <variant>
-#include <stdexcept>
+#include <type_traits>
 #include <nlohmann/json.hpp>
 
 namespace synapse {
@@ -24,6 +24,8 @@ struct error {
     int code;
     std::string message;
     std::optional<nlohmann::json> data;
+
+    error() = default;
 
     error(int c, std::string msg, std::optional<nlohmann::json> d = std::nullopt)
         : code(c), message(std::move(msg)), data(std::move(d)) {}
