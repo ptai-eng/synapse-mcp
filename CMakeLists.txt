@@ -24,7 +24,8 @@ target_include_directories(synapse_mcp INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(synapse_mcp INTERFACE nlohmann_json::nlohmann_json)
+find_package(Threads REQUIRED)
+target_link_libraries(synapse_mcp INTERFACE nlohmann_json::nlohmann_json Threads::Threads)
 
 # Examples
 option(SYNAPSE_MCP_BUILD_EXAMPLES "Build Synapse MCP examples" ON)
