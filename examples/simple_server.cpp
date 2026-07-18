@@ -15,7 +15,8 @@ double get_free_memory() {
 }
 
 int main() {
-    synapse::server server;
+    synapse::stdio_transport transport;
+    synapse::server server(transport);
 
     // 1. Register a simple Tool
     server.register_tool(

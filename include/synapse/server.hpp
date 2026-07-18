@@ -22,8 +22,19 @@ public:
         std::string version = "0.1.0";
     };
 
-    server() = default;
-    explicit server(server_info info) : info_(std::move(info)) {}
+    using send_callback = std::function<void(const nlohmann::json&)>;
+    using start_callback = std::function<void(std::function<void(const nlohmann::json&)>)>;
+    using stop_callback = std::function<void()>;
+    using wait_callback = std::function<void()>;
+
+    template <typename Transport>
+    explicit server(Transport& transport, server_info info = {}) 
+        : info_(std::move(info)),
+          transport_start_([&transport](auto cb) { transport.start(std::move(cb)); }),
+          transport_stop_([&transport]() { transport.stop(); }),
+          transport_wait_([&transport]() { transport.wait(); }),
+          transport_send_([&transport](const nlohmann::json& msg) { transport.send(msg); }) 
+    {}
 
     void register_tool(std::string name, std::string description, schema inputSchema, tool_callback callback) {
         tools_[name] = {
@@ -40,17 +51,23 @@ public:
     }
 
     void start() {
-        transport_.start([this](const nlohmann::json& msg) {
-            handle_message(msg);
-        });
+        if (transport_start_) {
+            transport_start_([this](const nlohmann::json& msg) {
+                handle_message(msg);
+            });
+        }
     }
 
     void wait() {
-        transport_.wait();
+        if (transport_wait_) {
+            transport_wait_();
+        }
     }
 
     void stop() {
-        transport_.stop();
+        if (transport_stop_) {
+            transport_stop_();
+        }
     }
 
 private:
@@ -65,7 +82,10 @@ private:
     };
 
     server_info info_;
-    stdio_transport transport_;
+    start_callback transport_start_;
+    stop_callback transport_stop_;
+    wait_callback transport_wait_;
+    send_callback transport_send_;
     std::map<std::string, registered_tool> tools_;
     std::map<std::string, registered_resource> resources_;
 
