@@ -3,7 +3,7 @@
   <p><strong>A Modern, High-Performance, Header-Only C++20 SDK for Model Context Protocol</strong></p>
 
   <p>
-    <a href="https://github.com/ptai-eng/synapse-mcp"><img src="https://img.shields.io/badge/version-0.1.0-blue.svg?style=flat-square" alt="Version 0.1.0"></a>
+    <a href="https://github.com/ptai-eng/synapse-mcp"><img src="https://img.shields.io/badge/version-0.2.0-blue.svg?style=flat-square" alt="Version 0.2.0"></a>
     <a href="https://github.com/ptai-eng/synapse-mcp/actions/workflows/ci.yml"><img src="https://github.com/ptai-eng/synapse-mcp/actions/workflows/ci.yml/badge.svg?style=flat-square" alt="CI Status"></a>
     <a href="https://github.com/ptai-eng/synapse-mcp/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
     <a href="https://isocpp.org/"><img src="https://img.shields.io/badge/C%2B%2B-20-blue.svg?style=flat-square&logo=c%2B%2B" alt="C++20"></a>
@@ -21,6 +21,8 @@ Inspired by the design philosophies of industry standards like [spdlog](https://
 * **Header-only:** Just drop the `include/` folder into your project and you're ready to go. No complex build steps or linking headaches.
 * **Modern C++20/23:** Utilizes the latest language features (`std::expected`, `std::variant`, `std::optional`) for expressive, safe, and clean code.
 * **Zero Overhead Abstractions:** Designed for latency-critical applications where every CPU cycle counts.
+* **Fully Featured MCP Spec:** Supports Tools, Resources, Prompts, and Sampling natively out-of-the-box.
+* **Multi-Threaded & Thread-Safe:** Handles incoming JSON-RPC requests asynchronously via `std::thread`, using `std::shared_mutex` to safely protect all state interactions.
 * **Dependency Light:** Uses only `nlohmann/json` for robust JSON-RPC 2.0 serialization. 
 
 ##  Installation
