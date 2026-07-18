@@ -7,6 +7,7 @@
 #include <future>
 #include <mutex>
 #include <atomic>
+#include <thread>
 #include <nlohmann/json.hpp>
 #include "protocol.hpp"
 
@@ -16,6 +17,7 @@ class client {
 public:
     using message_callback = std::function<void(const nlohmann::json&)>;
     using send_callback = std::function<void(const nlohmann::json&)>;
+    using request_handler = std::function<std::expected<nlohmann::json, error>(const std::string& method, const std::optional<nlohmann::json>& params)>;
 
     template <typename Transport>
     explicit client(Transport& transport) : transport_send_([&transport](const nlohmann::json& msg) { transport.send(msg); }) {
@@ -28,6 +30,10 @@ public:
 
     void on_message(const nlohmann::json& msg) {
         handle_message(msg);
+    }
+
+    void set_request_handler(request_handler handler) {
+        request_handler_ = std::move(handler);
     }
 
     std::future<std::expected<nlohmann::json, error>> send_request(const std::string& method, const std::optional<nlohmann::json>& params = std::nullopt) {
@@ -87,16 +93,56 @@ public:
         });
     }
 
+    std::future<std::expected<nlohmann::json, error>> list_prompts() {
+        return send_request("prompts/list");
+    }
+
+    std::future<std::expected<nlohmann::json, error>> get_prompt(const std::string& name, const std::map<std::string, std::string>& arguments = {}) {
+        nlohmann::json args = nlohmann::json::object();
+        for (const auto& [k, v] : arguments) {
+            args[k] = v;
+        }
+        return send_request("prompts/get", nlohmann::json{
+            {"name", name},
+            {"arguments", args}
+        });
+    }
+
 private:
     send_callback transport_send_;
+    request_handler request_handler_;
     std::atomic<int64_t> next_id_{1};
     std::mutex promises_mutex_;
     std::map<int64_t, std::promise<std::expected<nlohmann::json, error>>> promises_;
 
     void handle_message(const nlohmann::json& msg) {
-        if (msg.contains("id") && !msg.contains("method")) {
-            // It's a response
-            response res = msg.get<response>();
+        if (msg.contains("id")) {
+            if (msg.contains("method")) {
+                // It's an incoming request from the Server (e.g. sampling/createMessage)
+                request req = msg.get<request>();
+                if (request_handler_) {
+                    std::thread([this, req]() {
+                        response res;
+                        res.id = req.id;
+                        auto result = request_handler_(req.method, req.params);
+                        if (result.has_value()) {
+                            res.result = *result;
+                        } else {
+                            res.err = result.error();
+                        }
+                        nlohmann::json j_res = res;
+                        transport_send_(j_res);
+                    }).detach();
+                } else {
+                    response res;
+                    res.id = req.id;
+                    res.err = error(error_code::method_not_found, "Client does not handle requests");
+                    nlohmann::json j_res = res;
+                    transport_send_(j_res);
+                }
+            } else {
+                // It's a response to a request we sent
+                response res = msg.get<response>();
             if (std::holds_alternative<int64_t>(res.id)) {
                 int64_t id = std::get<int64_t>(res.id);
                 
@@ -120,6 +166,10 @@ private:
                     prom.set_value(nlohmann::json::object());
                 }
             }
+        }
+        } else if (msg.contains("method") && !msg.contains("id")) {
+            // It's a notification
+            // Could add an on_notification callback here if needed
         }
     }
 };

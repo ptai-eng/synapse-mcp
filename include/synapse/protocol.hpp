@@ -205,4 +205,47 @@ inline void from_json(const nlohmann::json& j, resource& r) {
     }
 }
 
+struct prompt_argument {
+    std::string name;
+    std::string description;
+    bool required = false;
+};
+
+inline void to_json(nlohmann::json& j, const prompt_argument& pa) {
+    j = nlohmann::json{{"name", pa.name}, {"description", pa.description}, {"required", pa.required}};
+}
+
+inline void from_json(const nlohmann::json& j, prompt_argument& pa) {
+    j.at("name").get_to(pa.name);
+    if (j.contains("description")) {
+        j.at("description").get_to(pa.description);
+    }
+    if (j.contains("required")) {
+        j.at("required").get_to(pa.required);
+    }
+}
+
+struct prompt {
+    std::string name;
+    std::string description;
+    std::vector<prompt_argument> arguments;
+};
+
+inline void to_json(nlohmann::json& j, const prompt& p) {
+    j = nlohmann::json{{"name", p.name}, {"description", p.description}};
+    if (!p.arguments.empty()) {
+        j["arguments"] = p.arguments;
+    }
+}
+
+inline void from_json(const nlohmann::json& j, prompt& p) {
+    j.at("name").get_to(p.name);
+    if (j.contains("description")) {
+        j.at("description").get_to(p.description);
+    }
+    if (j.contains("arguments")) {
+        j.at("arguments").get_to(p.arguments);
+    }
+}
+
 } // namespace synapse
