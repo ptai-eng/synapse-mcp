@@ -15,6 +15,10 @@ list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
 include(Catch)
 catch_discover_tests(synapse_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
 
+add_executable(synapse_contract_tests contracts.cpp)
+target_link_libraries(synapse_contract_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
+catch_discover_tests(synapse_contract_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
+
 add_subdirectory(schema)
 
 set(_consumer_arguments
