@@ -2,6 +2,7 @@
 
 #include <synapse/detail/owned_executor.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -53,24 +54,31 @@ TEST_CASE("M1.executor.serial_and_bounded", "[M1][executor]") {
     std::atomic<int> active{0};
     std::atomic<int> maximum{0};
     std::vector<int> order;
+    std::mutex order_mutex;
     std::promise<void> started;
     std::promise<void> drained;
     auto started_future = started.get_future();
     auto drained_future = drained.get_future();
-    owned_executor executor;
-    release_on_exit cleanup{blocked};
     auto record = [&](int index) {
         const auto count = ++active;
         maximum.store((std::max)(maximum.load(), count));
-        order.push_back(index);
+        {
+            std::lock_guard lock(order_mutex);
+            order.push_back(index);
+        }
         --active;
     };
+    owned_executor executor;
+    release_on_exit cleanup{blocked};
     REQUIRE(executor.enqueue(number(0), [&](const synapse::request_context&) {
         const auto count = ++active;
         maximum.store((std::max)(maximum.load(), count));
         started.set_value();
         blocked.wait();
-        order.push_back(0);
+        {
+            std::lock_guard lock(order_mutex);
+            order.push_back(0);
+        }
         --active;
     }));
     REQUIRE(started_future.wait_for(2s) == std::future_status::ready);
@@ -158,8 +166,11 @@ TEST_CASE("M1.executor.typed_ids", "[M1][executor]") {
     gate blocked;
     std::promise<void> started;
     auto started_future = started.get_future();
+    std::promise<void> drained;
+    auto drained_future = drained.get_future();
     std::atomic<int> number_calls{0};
     std::atomic<int> string_calls{0};
+    std::atomic<int> unsigned_calls{0};
     owned_executor executor;
     release_on_exit cleanup{blocked};
     REQUIRE(executor.enqueue(number(0), [&](const synapse::request_context&) {
@@ -168,12 +179,19 @@ TEST_CASE("M1.executor.typed_ids", "[M1][executor]") {
     }));
     REQUIRE(started_future.wait_for(2s) == std::future_status::ready);
     REQUIRE(executor.enqueue(number(1), [&](const synapse::request_context&) { ++number_calls; }));
+    const auto duplicate = executor.enqueue(std::uint64_t{1}, [](const synapse::request_context&) {});
+    REQUIRE_FALSE(duplicate);
+    REQUIRE(duplicate.error().code == synapse::sdk_errc::invalid_state);
     REQUIRE(executor.enqueue(std::string("1"), [&](const synapse::request_context& context) {
         if (std::get<std::string>(context.id) == "1") ++string_calls;
     }));
-    executor.cancel(number(1));
-    std::promise<void> drained;
-    auto drained_future = drained.get_future();
+    executor.cancel(std::uint64_t{1});
+    REQUIRE(executor.enqueue((std::numeric_limits<std::uint64_t>::max)(),
+        [&](const synapse::request_context& context) {
+            if (std::get<std::uint64_t>(context.id) == (std::numeric_limits<std::uint64_t>::max)()) {
+                ++unsigned_calls;
+            }
+        }));
     REQUIRE(executor.enqueue(number(-1), [&](const synapse::request_context&) { drained.set_value(); }));
     blocked.release();
     REQUIRE(drained_future.wait_for(2s) == std::future_status::ready);
@@ -181,6 +199,9 @@ TEST_CASE("M1.executor.typed_ids", "[M1][executor]") {
     REQUIRE(executor.wait());
     REQUIRE(number_calls == 0);
     REQUIRE(string_calls == 1);
+    REQUIRE(unsigned_calls == 1);
+    REQUIRE(synapse::detail::same_request_id(number(0), std::uint64_t{0}));
+    REQUIRE_FALSE(synapse::detail::same_request_id(number(-1), (std::numeric_limits<std::uint64_t>::max)()));
 }
 
 TEST_CASE("M1.executor.worker_wait_rejected", "[M1][executor]") {
@@ -201,9 +222,9 @@ TEST_CASE("M1.executor.worker_wait_rejected", "[M1][executor]") {
 
 TEST_CASE("M1.executor.exceptions_and_repeated_lifecycles", "[M1][executor]") {
     for (int iteration = 0; iteration < 30; ++iteration) {
-        owned_executor executor;
         std::promise<void> survived;
         auto future = survived.get_future();
+        owned_executor executor;
         REQUIRE(executor.enqueue(number(1), [](const synapse::request_context&) {
             throw std::runtime_error("private application failure");
         }));
@@ -246,4 +267,53 @@ TEST_CASE("M1.executor.stop_discards_pending_and_rejects_bad_admission", "[M1][e
     REQUIRE_FALSE(admission);
     REQUIRE(admission.error().code == synapse::sdk_errc::invalid_state);
     REQUIRE(invalid.wait());
+}
+
+TEST_CASE("M1.executor.stop_callbacks_may_reenter", "[M1][executor]") {
+    gate blocked;
+    std::promise<void> started;
+    auto future = started.get_future();
+    std::atomic<bool> reentered{false};
+    owned_executor executor;
+    release_on_exit cleanup{blocked};
+    REQUIRE(executor.enqueue(number(1), [&](const synapse::request_context& context) {
+        std::stop_callback on_stop(context.stop, [&] {
+            executor.cancel(number(999));
+            executor.stop();
+            const auto admission = executor.enqueue(number(3), [](const synapse::request_context&) {});
+            reentered = !admission && admission.error().code == synapse::sdk_errc::invalid_state;
+        });
+        started.set_value();
+        blocked.wait();
+    }));
+    REQUIRE(future.wait_for(2s) == std::future_status::ready);
+    executor.cancel(std::uint64_t{1});
+    REQUIRE(reentered);
+    blocked.release();
+    REQUIRE(executor.wait());
+}
+
+TEST_CASE("M1.executor.destructor_joins", "[M1][executor]") {
+    gate blocked;
+    std::promise<void> started;
+    auto future = started.get_future();
+    std::promise<void> stopping;
+    auto stopping_future = stopping.get_future();
+    std::atomic<int> completed{0};
+    std::jthread release_after_stop([&] {
+        // A finite failure path prevents a fixture failure from stranding a join.
+        (void)stopping_future.wait_for(2s);
+        blocked.release();
+    });
+    {
+        owned_executor executor;
+        REQUIRE(executor.enqueue(number(1), [&](const synapse::request_context& context) {
+            std::stop_callback on_stop(context.stop, [&] { stopping.set_value(); });
+            started.set_value();
+            blocked.wait();
+            ++completed;
+        }));
+        REQUIRE(future.wait_for(2s) == std::future_status::ready);
+    }
+    REQUIRE(completed == 1);
 }
