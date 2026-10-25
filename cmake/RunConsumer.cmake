@@ -1,0 +1,61 @@
+cmake_minimum_required(VERSION 3.20)
+
+if(NOT DEFINED SYNAPSE_SOURCE_DIR)
+    get_filename_component(SYNAPSE_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+endif()
+if(NOT DEFINED SYNAPSE_CONSUMER_BINARY_DIR)
+    message(FATAL_ERROR "SYNAPSE_CONSUMER_BINARY_DIR must name a consumer build directory")
+endif()
+
+# Each CTest invocation configures a fresh tree without deleting an existing one.
+string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef consumer_run)
+set(consumer_binary_dir "${SYNAPSE_CONSUMER_BINARY_DIR}/run-${consumer_run}")
+set(configure_command "${CMAKE_COMMAND}"
+    -S "${SYNAPSE_SOURCE_DIR}/tests/consumer"
+    -B "${consumer_binary_dir}"
+    "-DSYNAPSE_SOURCE_DIR=${SYNAPSE_SOURCE_DIR}")
+if(DEFINED SYNAPSE_CONSUMER_GENERATOR AND NOT SYNAPSE_CONSUMER_GENERATOR STREQUAL "")
+    list(APPEND configure_command -G "${SYNAPSE_CONSUMER_GENERATOR}")
+endif()
+if(DEFINED SYNAPSE_CONSUMER_CXX_COMPILER AND NOT SYNAPSE_CONSUMER_CXX_COMPILER STREQUAL "")
+    list(APPEND configure_command "-DCMAKE_CXX_COMPILER=${SYNAPSE_CONSUMER_CXX_COMPILER}")
+endif()
+if(DEFINED SYNAPSE_CONSUMER_GENERATOR_PLATFORM AND NOT SYNAPSE_CONSUMER_GENERATOR_PLATFORM STREQUAL "")
+    list(APPEND configure_command -A "${SYNAPSE_CONSUMER_GENERATOR_PLATFORM}")
+endif()
+if(DEFINED SYNAPSE_CONSUMER_GENERATOR_TOOLSET AND NOT SYNAPSE_CONSUMER_GENERATOR_TOOLSET STREQUAL "")
+    list(APPEND configure_command -T "${SYNAPSE_CONSUMER_GENERATOR_TOOLSET}")
+endif()
+
+if(SYNAPSE_CONSUMER_PARENT_DEPENDENCY)
+    list(APPEND configure_command
+        "-DSYNAPSE_CONSUMER_PARENT_DEPENDENCY=${SYNAPSE_CONSUMER_PARENT_DEPENDENCY}")
+    execute_process(COMMAND ${configure_command} RESULT_VARIABLE configure_result
+        OUTPUT_VARIABLE configure_output ERROR_VARIABLE configure_error)
+    if(SYNAPSE_CONSUMER_PARENT_DEPENDENCY STREQUAL "nlohmann")
+        set(expected_rejection "Pre-existing nlohmann/json target is incompatible")
+    elseif(SYNAPSE_CONSUMER_PARENT_DEPENDENCY STREQUAL "jsoncons")
+        set(expected_rejection "Pre-existing jsoncons target has unqualified provenance/correction")
+    else()
+        message(FATAL_ERROR "Unknown parent dependency fixture")
+    endif()
+    if(configure_result EQUAL 0 OR NOT "${configure_output}${configure_error}" MATCHES "${expected_rejection}")
+        message(FATAL_ERROR "Parent dependency was not rejected as required: ${configure_output}${configure_error}")
+    endif()
+    message(STATUS "Parent ${SYNAPSE_CONSUMER_PARENT_DEPENDENCY} target rejected as required")
+    return()
+endif()
+
+execute_process(COMMAND ${configure_command} RESULT_VARIABLE configure_result)
+if(NOT configure_result EQUAL 0)
+    message(FATAL_ERROR "Clean consumer configuration failed (${configure_result})")
+endif()
+
+set(build_command "${CMAKE_COMMAND}" --build "${consumer_binary_dir}" --parallel 4)
+if(DEFINED SYNAPSE_CONSUMER_CONFIG AND NOT SYNAPSE_CONSUMER_CONFIG STREQUAL "")
+    list(APPEND build_command --config "${SYNAPSE_CONSUMER_CONFIG}")
+endif()
+execute_process(COMMAND ${build_command} RESULT_VARIABLE build_result)
+if(NOT build_result EQUAL 0)
+    message(FATAL_ERROR "Clean consumer build failed (${build_result})")
+endif()
