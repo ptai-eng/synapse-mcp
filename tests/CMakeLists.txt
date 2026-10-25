@@ -41,3 +41,9 @@ foreach(_dependency IN ITEMS nlohmann jsoncons)
     set_tests_properties(synapse.M1.consumer.reject_parent_${_dependency}
         PROPERTIES TIMEOUT 30)
 endforeach()
+
+include("${PROJECT_SOURCE_DIR}/cmake/SchemaTestSuite.cmake")
+add_executable(synapse_schema_adapter_tests schema_adapter.cpp)
+target_link_libraries(synapse_schema_adapter_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
+synapse_use_schema_test_suite(synapse_schema_adapter_tests)
+catch_discover_tests(synapse_schema_adapter_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
