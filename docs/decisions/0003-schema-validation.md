@@ -9,7 +9,7 @@
 
 Use **jsoncons v1.10.0**, pinned to commit `9e57e421285422d7aeeb5aa7dc839f6a19121ee6`, through an internal validation adapter. Keep `nlohmann::json` as the protocol and application-facing JSON type, including the current vendored 3.11.3 header. Do not replace or edit `include/nlohmann/`.
 
-Apply one narrowly scoped, tracked correction to jsoncons's downloaded build-tree source: make the `pattern` validator's regular-expression search use the full string range, including embedded NUL characters. Preserve the upstream license and notices. Do not apply a broad regex rewrite, modify tracked vendor headers, or silently patch system-installed dependencies.
+Apply narrowly scoped, tracked corrections to jsoncons's downloaded build-tree source: make the `pattern` validator's regular-expression search use the full string range, including embedded NUL characters, and preserve the full property-key length in three `additionalProperties` bookkeeping lookups. Preserve the upstream license and notices. Do not apply a broad regex rewrite, modify tracked vendor headers, or silently patch system-installed dependencies.
 
 The pinned source and correction are **candidates until the qualification gate passes**. Neither upstream's supported-draft documentation nor this ADR establishes that Synapse currently provides JSON Schema 2020-12 validation. Tool migration must wait for the gate.
 
@@ -36,6 +36,12 @@ The stable v1.10.0 release was published on 2026-10-05. Its license is **Boost S
 In that source file, line 643 searches `instance.as_cstring()`. It can stop at an embedded NUL: schema `{"type":"string","pattern":"z"}` must accept the JSON string `"a\u0000z"`. The correction obtains `instance.as_string_view()` and passes its begin/end range to `std::regex_search`. It changes no schema branching or regex syntax. The adapter emits normalized errors instead of exposing upstream messages containing raw instance values. [Pinned validator source](https://github.com/danielaparker/jsoncons/blob/v1.10.0/include/jsoncons_ext/jsonschema/common/keyword_validator.hpp).
 
 The `patternProperties` searches at lines 2757 and 2805 already receive `std::basic_string` keys, as does their regex factory. Do not patch them as C-string searches; cover embedded-NUL keys with regression tests. [Key representation](https://github.com/danielaparker/jsoncons/blob/v1.10.0/include/jsoncons/key_value.hpp), [key policies](https://github.com/danielaparker/jsoncons/blob/v1.10.0/include/jsoncons/basic_json.hpp).
+
+### Qualification amendment: preserve property-key length
+
+The first actual qualification run exposed a second defect in the same frozen file. `additional_properties_validator` stores full-length property names but looks them up with `allowed_properties.find(prop.key().c_str())` at original lines 2909, 2941 and 3025. A key `std::string("a\0z",3)` matching `patternProperties: {"z": {"type": "integer"}}` is consequently rejected by `additionalProperties: false`. This is distinct from the regex searches above.
+
+Replace only those three lookups with `allowed_properties.find(prop.key())`. Extend the version-locked correction and its exact whole-file postimage guard together. Qualify the affected additional-property paths with embedded-NUL matching and nonmatching keys; retain the observed failing first-correction result. This amendment adds no dialect or schema feature and authorizes no other dependency edits. Remove both corrections when an upstream release contains equivalent fixes and passes the same qualification gate. Evidence: `build/execution/T01-report.md` records the local failing run and source diagnosis; it is an execution artifact, not a public compatibility claim.
 
 The implementation task must make correction application reproducible and fail closed:
 

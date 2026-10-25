@@ -10,7 +10,7 @@ Depends: none. Files (5): `cmake/JsonconsDependency.cmake`, `cmake/ApplyJsoncons
 
 - [ ] RED: `pattern_nul` requires schema `{"type":"string","pattern":"z"}` to accept `std::string("a\0z",3)`; NUL-containing property names also work. Require mismatched provenance and missing regex support to fail closed.
 - [ ] Run the standalone unpatched qualification build with `cmake -S tests/schema -B build/schema-red -G Ninja -DSYNAPSE_SCHEMA_APPLY_PATCH=OFF`, build it, then `ctest --test-dir build/schema-red --output-on-failure -R pattern_nul`; record the expected failure.
-- [ ] Implement the exact pinned fetch, LF/preimage verification and length-aware `pattern` correction in ADR-003. The unpatched flag exists only in the standalone qualification project; root SDK builds cannot disable the correction. Make reapplication idempotent only for the exact postimage.
+- [ ] Implement the exact pinned fetch, LF/preimage verification and length-aware string/key corrections in ADR-003, including its qualification amendment. The unpatched flag exists only in the standalone qualification project; root SDK builds cannot disable the correction. Make reapplication idempotent only for the exact postimage.
 - [ ] GREEN: configure/build `build/schema-green` with correction ON, run its CTest cases and a second configuration; reject a deliberately mismatched copy. No tracked vendor edits.
 - [ ] Review and commit `build: qualify schema dependency correction`.
 
