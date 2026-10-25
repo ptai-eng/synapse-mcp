@@ -9,7 +9,7 @@
 
 Use **jsoncons v1.10.0**, pinned to commit `9e57e421285422d7aeeb5aa7dc839f6a19121ee6`, through an internal validation adapter. Keep `nlohmann::json` as the protocol and application-facing JSON type, including the current vendored 3.11.3 header. Do not replace or edit `include/nlohmann/`.
 
-Apply narrowly scoped, tracked corrections to jsoncons's downloaded build-tree source: make the `pattern` validator's regular-expression search use the full string range, including embedded NUL characters, and preserve the full property-key length in three `additionalProperties` bookkeeping lookups. Preserve the upstream license and notices. Do not apply a broad regex rewrite, modify tracked vendor headers, or silently patch system-installed dependencies.
+Apply narrowly scoped, tracked corrections to jsoncons's downloaded build-tree source: make the `pattern` validator's regular-expression search use the full string range, including embedded NUL characters, and preserve the full property-key length in `additionalProperties`, `properties` and `unevaluatedProperties` lookups. Preserve the upstream license and notices. Do not apply a broad regex rewrite, modify tracked vendor headers, or silently patch system-installed dependencies.
 
 The pinned source and correction are **candidates until the qualification gate passes**. Neither upstream's supported-draft documentation nor this ADR establishes that Synapse currently provides JSON Schema 2020-12 validation. Tool migration must wait for the gate.
 
@@ -42,6 +42,10 @@ The `patternProperties` searches at lines 2757 and 2805 already receive `std::ba
 The first actual qualification run exposed a second defect in the same frozen file. `additional_properties_validator` stores full-length property names but looks them up with `allowed_properties.find(prop.key().c_str())` at original lines 2909, 2941 and 3025. A key `std::string("a\0z",3)` matching `patternProperties: {"z": {"type": "integer"}}` is consequently rejected by `additionalProperties: false`. This is distinct from the regex searches above.
 
 Replace only those three lookups with `allowed_properties.find(prop.key())`. Extend the version-locked correction and its exact whole-file postimage guard together. Qualify the affected additional-property paths with embedded-NUL matching and nonmatching keys; retain the observed failing first-correction result. This amendment adds no dialect or schema feature and authorizes no other dependency edits. Remove both corrections when an upstream release contains equivalent fixes and passes the same qualification gate. Evidence: `build/execution/T01-report.md` records the local failing run and source diagnosis; it is an execution artifact, not a public compatibility claim.
+
+The prefix-collision regression also demonstrates the same truncation in the two `properties_.find(prop.key().c_str())` paths used by `properties_validator` validation and walking. Include the corresponding length-preserving `prop.key()` replacements and regressions distinguishing a NUL-containing property from its prefix. These corrections remain restricted to string/key length; no schema branching is changed.
+
+A one-pass audit of this file found two equivalent `results.evaluated_properties.find(prop.key().c_str())` lookups at original lines 3930 and 3966. Preserve the full key there too, and test both false-valued and schema-valued `unevaluatedProperties`. The complete correction boundary is one string-range change plus seven key lookups. Remaining C-string uses in diagnostic rendering are left unchanged because the adapter never returns those raw messages.
 
 The implementation task must make correction application reproducible and fail closed:
 
