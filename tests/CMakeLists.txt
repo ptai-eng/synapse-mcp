@@ -29,6 +29,12 @@ catch_discover_tests(synapse_protocol_tests TEST_PREFIX "synapse." PROPERTIES TI
 
 add_subdirectory(schema)
 
+if(UNIX)
+    add_executable(synapse_posix_tests posix_io.cpp)
+    target_link_libraries(synapse_posix_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
+    catch_discover_tests(synapse_posix_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
+endif()
+
 set(_consumer_arguments
     "-DSYNAPSE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
     "-DSYNAPSE_CONSUMER_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/consumer"
