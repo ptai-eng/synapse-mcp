@@ -19,6 +19,10 @@ add_executable(synapse_contract_tests contracts.cpp)
 target_link_libraries(synapse_contract_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
 catch_discover_tests(synapse_contract_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
 
+add_executable(synapse_executor_tests owned_executor.cpp)
+target_link_libraries(synapse_executor_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
+catch_discover_tests(synapse_executor_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
+
 add_executable(synapse_protocol_tests message_decoder.cpp)
 target_link_libraries(synapse_protocol_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
 catch_discover_tests(synapse_protocol_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
