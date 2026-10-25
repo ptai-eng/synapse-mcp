@@ -28,6 +28,7 @@ Protocol target, implemented behavior and verified interoperability are separate
 - [ADR-001: target users, revision choice and alternatives](docs/decisions/0001-product-and-protocol.md)
 - [M1 specification: scope and acceptance criteria](specs/001-native-stdio-foundation/spec.md)
 - [Project constitution: engineering principles](.specify/memory/constitution.md)
+- [M1 implementation plan](tasks/plan.md) and [TDD task checklist](tasks/todo.md)
 
 M1 focuses on a native application exposing a status tool, resource and prompt backed by its own state. Network deployment, model orchestration and dual-era protocol support are outside this milestone. The decision record explains why the first release target differs from the latest specification.
 

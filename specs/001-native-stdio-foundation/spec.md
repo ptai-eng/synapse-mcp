@@ -5,6 +5,7 @@
 - Milestone: M1, the first verified native stdio server integration
 - Decision: [ADR-001](../../docs/decisions/0001-product-and-protocol.md)
 - Principles: [Constitution](../../.specify/memory/constitution.md)
+- Execution: [implementation plan](../../tasks/plan.md) and [TDD task checklist](../../tasks/todo.md); runtime work remains pending
 
 ## Objective and primary user
 

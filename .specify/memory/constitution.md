@@ -1,6 +1,6 @@
 # Synapse MCP Constitution
 
-- Version: 1.0.0
+- Version: 1.1.0
 - Ratified: 2026-10-25
 - Last amended: 2026-10-25
 
@@ -15,6 +15,8 @@ The accepted product and protocol decision is [ADR-001](../../docs/decisions/000
 Require C++23 and a standard library providing the facilities used by the public API, including `std::expected`. Preserve a header-only core and the `synapse::mcp` CMake target. Propagate language and dependency requirements to downstream consumers.
 
 Name dependencies and their build requirements. Keep future HTTP stacks, model providers and application frameworks outside the core. Do not edit vendored implementations to solve Synapse defects.
+
+A demonstrated dependency defect may use a narrowly scoped, version-locked correction applied only to downloaded build-tree sources. Record the upstream provenance, exact correction, regression gate, license obligations and removal condition in an ADR. Verify the preimage/postimage and fail on a mismatch. This exception does not allow editing tracked vendor copies, unrelated dependency changes or unqualified compatibility claims. [ADR-003](../../docs/decisions/0003-schema-validation.md) records the first such decision.
 
 ## 3. Specify protocol behavior before claiming compatibility
 
