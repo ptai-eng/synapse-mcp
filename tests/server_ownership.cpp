@@ -341,10 +341,19 @@ TEST_CASE("M1.ownership.interrupted_start_joins_partial_work", "[M1][ownership][
 TEST_CASE("M1.ownership.callback_wait_is_instance_scoped", "[M1][ownership][review-fix]") {
     counting_transport ta, tb;
     synapse::server a(ta), b(tb);
-    b.stop();
     std::promise<void> entered;
     bool independent_wait = false, independent_timed_wait = false;
     bool self_wait_rejected = false, self_timed_wait_rejected = false;
+    // Unwind before captured state or B dies, including partial startup.
+    struct ordered_cleanup {
+        synapse::server& a;
+        synapse::server& b;
+        ~ordered_cleanup() noexcept {
+            a.stop(); (void)a.wait();
+            b.stop(); (void)b.wait();
+        }
+    } cleanup{a, b};
+    b.stop();
     REQUIRE(a.register_resource(descriptor(), [&](const synapse::request_context& context) -> std::expected<synapse::resource_result, synapse::handler_error> {
         std::stop_callback on_stop(context.stop, [&] {
             independent_wait = b.wait().has_value();
@@ -369,10 +378,22 @@ TEST_CASE("M1.ownership.callback_wait_is_instance_scoped", "[M1][ownership][revi
 TEST_CASE("M1.ownership.nested_callback_wait_checks_stack", "[M1][ownership][review-fix]") {
     counting_transport ta, tb, tc;
     synapse::server a(ta), b(tb), c(tc);
-    c.stop();
     std::promise<void> entered_a, entered_b;
     bool outer_rejected = false, nested_self_rejected = false, independent_wait = false;
     bool joined_b_from_a = false;
+    // A's cancellation callback uses B, whose callback uses C and A.
+    // Join in dependency order while every captured local/server is alive.
+    struct ordered_cleanup {
+        synapse::server& a;
+        synapse::server& b;
+        synapse::server& c;
+        ~ordered_cleanup() noexcept {
+            a.stop(); (void)a.wait();
+            b.stop(); (void)b.wait();
+            c.stop(); (void)c.wait();
+        }
+    } cleanup{a, b, c};
+    c.stop();
     REQUIRE(b.register_resource(descriptor(), [&](const synapse::request_context& context) -> std::expected<synapse::resource_result, synapse::handler_error> {
         std::stop_callback on_stop(context.stop, [&] {
             // A.stop -> A stop callback -> B.stop -> B stop callback -> A.
