@@ -50,9 +50,10 @@ function(synapse_add_jsoncons_dependency)
     endif()
     add_library(jsoncons::jsoncons ALIAS jsoncons)
     # Schema template instantiations exceed COFF's ordinary section limit on
-    # the supported MinGW toolchain, including in downstream consumers.
+    # supported Windows GNU and MSVC toolchains, including downstream consumers.
     target_compile_options(jsoncons INTERFACE
-        "$<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:GNU>>:-Wa,-mbig-obj>")
+        "$<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:GNU>>:-Wa,-mbig-obj>"
+        "$<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC>>:/bigobj>")
     set_property(TARGET jsoncons PROPERTY SYNAPSE_JSONCONS_QUALIFIED TRUE)
     set_property(TARGET jsoncons PROPERTY SYNAPSE_JSONCONS_COMMIT "${_revision}")
     set_property(TARGET jsoncons PROPERTY SYNAPSE_JSONCONS_SOURCE_DIR "${synapse_jsoncons_SOURCE_DIR}")
