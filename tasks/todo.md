@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: Ready for execution; all implementation work below is pending. Read [plan.md](plan.md), its interfaces and both implementation ADRs first. Do not mark a task complete from document review alone.
+Status: Execution in progress through the user-requested T10 checkpoint; see [execution.md](execution.md) for evidence and blockers. Read [plan.md](plan.md), its interfaces and both implementation ADRs first. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -8,41 +8,41 @@ Every task follows RED -> observed failure -> minimal implementation -> GREEN/re
 
 Depends: none. Files (5): `cmake/JsonconsDependency.cmake`, `cmake/ApplyJsonconsPatch.cmake`, `cmake/patches/jsoncons-v1.10.0-pattern-range.patch`, `tests/schema/CMakeLists.txt`, `tests/schema/qualification.cpp`.
 
-- [ ] RED: `pattern_nul` requires schema `{"type":"string","pattern":"z"}` to accept `std::string("a\0z",3)`; NUL-containing property names also work. Require mismatched provenance and missing regex support to fail closed.
-- [ ] Run the standalone unpatched qualification build with `cmake -S tests/schema -B build/schema-red -G Ninja -DSYNAPSE_SCHEMA_APPLY_PATCH=OFF`, build it, then `ctest --test-dir build/schema-red --output-on-failure -R pattern_nul`; record the expected failure.
-- [ ] Implement the exact pinned fetch, LF/preimage verification and length-aware string/key corrections in ADR-003, including its qualification amendment. The unpatched flag exists only in the standalone qualification project; root SDK builds cannot disable the correction. Make reapplication idempotent only for the exact postimage.
-- [ ] GREEN: configure/build `build/schema-green` with correction ON, run its CTest cases and a second configuration; reject a deliberately mismatched copy. No tracked vendor edits.
-- [ ] Review and commit `build: qualify schema dependency correction`.
+- [x] RED: `pattern_nul` requires schema `{"type":"string","pattern":"z"}` to accept `std::string("a\0z",3)`; NUL-containing property names also work. Require mismatched provenance and missing regex support to fail closed.
+- [x] Run the standalone unpatched qualification build with `cmake -S tests/schema -B build/schema-red -G Ninja -DSYNAPSE_SCHEMA_APPLY_PATCH=OFF`, build it, then `ctest --test-dir build/schema-red --output-on-failure -R pattern_nul`; record the expected failure.
+- [x] Implement the exact pinned fetch, LF/preimage verification and length-aware string/key corrections in ADR-003, including its qualification amendment. The unpatched flag exists only in the standalone qualification project; root SDK builds cannot disable the correction. Make reapplication idempotent only for the exact postimage.
+- [x] GREEN: configure/build `build/schema-green` with correction ON, run its CTest cases and a second configuration; reject a deliberately mismatched copy. No tracked vendor edits.
+- [x] Review and commit `build: qualify schema dependency correction`.
 
 ## T02: Verify the downstream build contract
 
 Depends: T01. Files (5): `CMakeLists.txt`, `tests/CMakeLists.txt`, `tests/consumer/CMakeLists.txt`, `tests/consumer/main.cpp`, `cmake/RunConsumer.cmake`.
 
-- [ ] RED: the parent consumer requests C++17, links `synapse::mcp` and compiles `std::expected`; assert `synapse_mcp` is INTERFACE and dependency examples/tests targets are absent.
-- [ ] Run the clean consumer commands in plan.md and record the current failure; retain the existing serialization suite.
-- [ ] Propagate `cxx_std_23`, use one vendored nlohmann 3.11.3 source, add the qualified jsoncons target, set top-level-only example/test defaults and Catch2 discovery prefix/timeouts. Fail on incompatible/unqualified parent dependency targets.
-- [ ] GREEN: clean consumer configure/build plus full `build/m1` CTest; fresh build directory, not a cached success.
-- [ ] Review and commit `build: propagate the consumer contract`.
+- [x] RED: the parent consumer requests C++17, links `synapse::mcp` and compiles `std::expected`; assert `synapse_mcp` is INTERFACE and dependency examples/tests targets are absent.
+- [x] Run the clean consumer commands in plan.md and record the current failure; retain the existing serialization suite.
+- [x] Propagate `cxx_std_23`, use one vendored nlohmann 3.11.3 source, add the qualified jsoncons target, set top-level-only example/test defaults and Catch2 discovery prefix/timeouts. Fail on incompatible/unqualified parent dependency targets.
+- [x] GREEN: clean consumer configure/build plus full `build/m1` CTest; fresh build directory, not a cached success.
+- [x] Review and commit `build: propagate the consumer contract`.
 
 ## T03: Define the typed public contracts
 
 Depends: T02. Files (5): `include/synapse/errors.hpp`, `include/synapse/handlers.hpp`, `include/synapse/server_options.hpp`, `tests/contracts.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.contract.defaults` checks all numeric limits from ADR-002; compile-time assertions pin handler/result/context and `sdk_error` types.
-- [ ] Run the contract group and observe missing-interface failures.
-- [ ] Add the types and policy hook signatures from plan.md/ADR-002. Keep wire errors distinct; no worker, schema engine or unused executor abstraction in these public contracts.
-- [ ] GREEN: contract group and existing protocol tests; standalone include checks for each new public header.
-- [ ] Review and commit `feat: define owned server contracts`.
+- [x] RED: `M1.contract.defaults` checks all numeric limits from ADR-002; compile-time assertions pin handler/result/context and `sdk_error` types.
+- [x] Run the contract group and observe missing-interface failures.
+- [x] Add the types and policy hook signatures from plan.md/ADR-002. Keep wire errors distinct; no worker, schema engine or unused executor abstraction in these public contracts.
+- [x] GREEN: contract group and existing protocol tests; standalone include checks for each new public header.
+- [x] Review and commit `feat: define owned server contracts`.
 
 ## T04: Decode untrusted wire messages safely
 
 Depends: T03. Files (4): `include/synapse/protocol.hpp`, `include/synapse/detail/message_decoder.hpp`, `tests/message_decoder.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.protocol.reject_invalid_envelopes` covers non-object/batch input, missing/wrong jsonrpc/method, null/bool/float request IDs, scalar params and ambiguous result/error envelopes. `M1.protocol.roundtrip_ids` preserves string, signed and large unsigned IDs; optional descriptions remain optional.
-- [ ] Run the protocol group and retain the observed failures.
-- [ ] Implement `decode_message` from plan.md without exceptions escaping; preserve a known valid response ID or use null. Notifications have no response; raw codec compatibility is separate from incoming validation.
-- [ ] GREEN: protocol group and the original three serialization cases; no unsigned wrap or stale optional fields on object reuse.
-- [ ] Review and commit `fix: validate incoming RPC envelopes`.
+- [x] RED: `M1.protocol.reject_invalid_envelopes` covers non-object/batch input, missing/wrong jsonrpc/method, null/bool/float request IDs, scalar params and ambiguous result/error envelopes. `M1.protocol.roundtrip_ids` preserves string, signed and large unsigned IDs; optional descriptions remain optional.
+- [x] Run the protocol group and retain the observed failures.
+- [x] Implement `decode_message` from plan.md without exceptions escaping; preserve a known valid response ID or use null. Notifications have no response; raw codec compatibility is separate from incoming validation.
+- [x] GREEN: protocol group and the original three serialization cases; no unsigned wrap or stale optional fields on object reuse.
+- [x] Review and commit `fix: validate incoming RPC envelopes`.
 
 ## T05: Qualify the offline schema adapter
 
@@ -222,3 +222,6 @@ Depends: T20 and all checkpoint evidence. Files (5): `README.md`, `docs/migratio
 - [ ] Methods: T10-T14 evidence reviewed.
 - [ ] Reference/interop: T15-T18 evidence reviewed.
 - [ ] Release evidence: T19-T21 meet every acceptance criterion; unavailable checks remain explicit blockers to their support claims.
+
+
+
