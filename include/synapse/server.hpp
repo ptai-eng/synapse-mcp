@@ -1,416 +1,292 @@
 #pragma once
 
-#include <string>
-#include <vector>
+#include <synapse/detail/message_decoder.hpp>
+#include <synapse/detail/owned_executor.hpp>
+#include <synapse/server_options.hpp>
+#include <synapse/transport.hpp>
+#include <algorithm>
+#include <cmath>
 #include <map>
-#include <functional>
-#include <expected>
-#include <stdexcept>
-#include <future>
+#include <memory>
 #include <mutex>
-#include <shared_mutex>
-#include <atomic>
-#include <thread>
-#include <nlohmann/json.hpp>
-#include "protocol.hpp"
-#include "transport.hpp"
 
 namespace synapse {
 
+// Borrowed transport and captured state outlive this owner and its joined work.
+// One owner waits at a time. Destruction can wait for noncooperative callbacks.
 class server {
 public:
-    using tool_callback = std::function<std::expected<nlohmann::json, error>(const nlohmann::json&)>;
-    using resource_callback = std::function<nlohmann::json()>;
-    using prompt_callback = std::function<std::vector<nlohmann::json>(const std::map<std::string, std::string>&)>;
+    struct server_info { std::string name = "synapse-mcp-server"; std::string version = "0.2.0"; };
+    template<class Transport>
+    explicit server(Transport& transport, server_info info = {}, server_options options = {})
+        : info_(std::move(info)), options_(std::move(options)),
+          transport_start_([&transport](auto cb, auto close) { return transport.start(std::move(cb), std::move(close)); }),
+          transport_send_([&transport](const auto& wire) { return transport.send(wire); }),
+          transport_stop_([&transport] { transport.stop(); }),
+          transport_wait_([&transport] { return transport.wait(); }),
+          transport_wait_for_([&transport](auto timeout) { return transport.wait_for(timeout); }) {}
+    server(const server&) = delete;
+    server& operator=(const server&) = delete;
+    server(server&&) = delete;
+    server& operator=(server&&) = delete;
+    ~server() { stop(); (void)wait(); }
 
-    struct server_info {
-        std::string name = "synapse-mcp-server";
-        std::string version = "0.1.0";
-    };
-
-    using send_callback = std::function<void(const nlohmann::json&)>;
-    using start_callback = std::function<void(std::function<void(const nlohmann::json&)>)>;
-    using stop_callback = std::function<void()>;
-    using wait_callback = std::function<void()>;
-
-    template <typename Transport>
-    explicit server(Transport& transport, server_info info = {}) 
-        : info_(std::move(info)),
-          transport_start_([&transport](auto cb) { transport.start(std::move(cb)); }),
-          transport_stop_([&transport]() { transport.stop(); }),
-          transport_wait_([&transport]() { transport.wait(); }),
-          transport_send_([&transport](const nlohmann::json& msg) { transport.send(msg); }) 
-    {}
-
-    void register_tool(std::string name, std::string description, schema inputSchema, tool_callback callback) {
-        tools_[name] = {
-            synapse::tool{name, description, inputSchema},
-            std::move(callback)
-        };
+    std::expected<void, sdk_error> register_resource(resource descriptor, resource_handler handler) {
+        std::lock_guard lock(mutex_);
+        if (state_ != lifecycle::configuring) return local_error("Registration is frozen");
+        if (!handler || descriptor.uri.empty() || descriptor.name.empty() ||
+            !safe_text(descriptor.uri) || !safe_text(descriptor.name) || !safe_text(descriptor.description) ||
+            (descriptor.mimeType && (descriptor.mimeType->empty() || !safe_text(*descriptor.mimeType))) ||
+            resources_.contains(descriptor.uri)) return local_error("Invalid resource descriptor");
+        auto key = descriptor.uri;
+        resources_.emplace(std::move(key), registered_resource{std::move(descriptor), std::move(handler)});
+        return {};
     }
-
-    void register_resource(std::string uri, std::string name, std::string description, resource_callback callback, std::optional<std::string> mimeType = std::nullopt) {
-        std::unique_lock lock(mutex_);
-        resources_[uri] = {
-            synapse::resource{uri, name, description, mimeType},
-            std::move(callback)
-        };
-    }
-
-    void register_prompt(std::string name, std::string description, std::vector<prompt_argument> args, prompt_callback callback) {
-        std::unique_lock lock(mutex_);
-        prompts_[name] = {
-            synapse::prompt{name, description, args},
-            std::move(callback)
-        };
-    }
-
-    std::future<std::expected<nlohmann::json, error>> send_request(const std::string& method, const std::optional<nlohmann::json>& params = std::nullopt) {
-        request req;
-        req.id = static_cast<int64_t>(next_id_++);
-        req.method = method;
-        req.params = params;
-
-        std::promise<std::expected<nlohmann::json, error>> promise;
-        auto future = promise.get_future();
-
+    std::expected<void, sdk_error> start() {
         {
-            std::lock_guard<std::mutex> lock(promises_mutex_);
-            promises_.emplace(std::get<int64_t>(req.id), std::move(promise));
+            std::lock_guard lock(mutex_);
+            if (state_ != lifecycle::configuring) return local_error("Server already started or stopped");
+            state_ = lifecycle::starting;
+            if (info_.name.empty() || info_.version.empty() || !safe_text(info_.name) || !safe_text(info_.version) ||
+                !options_.max_pending_requests || !options_.tool_burst ||
+                !std::isfinite(options_.tool_requests_per_second) || options_.tool_requests_per_second <= 0 || !options_.now) {
+                state_ = lifecycle::stopped;
+                return local_error("Invalid server limits");
+            }
         }
-
-        transport_send_(req);
-        return future;
-    }
-
-    void start() {
-        if (transport_start_) {
-            transport_start_([this](const nlohmann::json& msg) {
-                handle_message(msg);
-            });
+        try {
+            auto executor = std::make_unique<detail::owned_executor>(options_.max_pending_requests);
+            bool interrupted;
+            {
+                std::lock_guard lock(mutex_);
+                executor_ = std::move(executor);
+                interrupted = state_ != lifecycle::starting;
+            }
+            if (interrupted) { executor_->stop(); return local_error("Server stopped during startup"); }
+            auto result = transport_start_([this](const auto& wire) {
+                callback_scope scope(this);
+                try { receive(wire); } catch (...) { stop(); }
+            }, [this](close_reason) { callback_scope scope(this); stop(); });
+            if (!result) { stop(); (void)wait(); return result; }
+            {
+                std::lock_guard lock(mutex_);
+                interrupted = state_ != lifecycle::starting;
+                if (!interrupted) state_ = lifecycle::running;
+            }
+            if (interrupted) { stop(); return local_error("Server stopped during startup"); }
+            return {};
+        } catch (...) {
+            stop(); (void)wait();
+            return std::unexpected(sdk_error{sdk_errc::resource_exhausted, "Cannot start server work"});
         }
     }
-
-    void wait() {
-        if (transport_wait_) {
-            transport_wait_();
+    void stop() noexcept {
+        detail::owned_executor* executor;
+        {
+            std::lock_guard lock(mutex_);
+            if (state_ == lifecycle::stopped) return;
+            state_ = lifecycle::stopping;
+            protocol_ = connection::closing;
+            for (auto& op : inflight_) op->cancelled = true;
+            executor = executor_.get();
         }
+        if (executor) { callback_scope scope(this); executor->stop(); }
+        transport_stop_(); // A close callback may synchronously reenter stop.
     }
-
-    void stop() {
-        if (transport_stop_) {
-            transport_stop_();
+    std::expected<void, sdk_error> wait() {
+        if (active_) return local_error("Cannot wait inside SDK callback");
+        if (auto result = transport_wait_(); !result) return result;
+        detail::owned_executor* executor;
+        { std::lock_guard lock(mutex_); executor = executor_.get(); }
+        if (executor) if (auto result = executor->wait(); !result) return result;
+        { std::lock_guard lock(mutex_); state_ = lifecycle::stopped; }
+        return {};
+    }
+    std::expected<bool, sdk_error> wait_for(std::chrono::milliseconds timeout) {
+        if (active_) return std::unexpected(local_error("Cannot wait inside SDK callback").error());
+        const auto deadline = std::chrono::steady_clock::now() + (std::max)(timeout, std::chrono::milliseconds::zero());
+        auto transport = transport_wait_for_(timeout);
+        if (!transport || !*transport) return transport;
+        detail::owned_executor* executor;
+        { std::lock_guard lock(mutex_); executor = executor_.get(); }
+        if (executor) {
+            auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+            auto result = executor->wait_for((std::max)(remaining, std::chrono::milliseconds::zero()));
+            if (!result || !*result) return result;
         }
+        { std::lock_guard lock(mutex_); state_ = lifecycle::stopped; }
+        return true;
     }
-
 private:
-    struct registered_tool {
-        synapse::tool info;
-        tool_callback callback;
+    enum class lifecycle { configuring, starting, running, stopping, stopped };
+    enum class connection { await_initialize, await_initialized, ready, closing };
+    struct registered_resource { resource descriptor; resource_handler handler; };
+    struct operation { json_rpc_id id; bool cancelled = false; };
+    struct completion {
+        server* owner; std::shared_ptr<operation> op;
+        ~completion() { owner->complete(op); }
     };
-
-    struct registered_resource {
-        synapse::resource info;
-        resource_callback callback;
+    struct callback_scope {
+        server* previous = active_;
+        explicit callback_scope(server* value) { active_ = value; }
+        ~callback_scope() { active_ = previous; }
     };
-
-    struct registered_prompt {
-        synapse::prompt info;
-        prompt_callback callback;
-    };
-
+    inline static thread_local server* active_ = nullptr;
     server_info info_;
-    start_callback transport_start_;
-    stop_callback transport_stop_;
-    wait_callback transport_wait_;
-    send_callback transport_send_;
-    
-    std::shared_mutex mutex_;
-    std::map<std::string, registered_tool> tools_;
+    server_options options_;
+    std::function<std::expected<void, sdk_error>(stdio_transport::message_callback, stdio_transport::close_callback)> transport_start_;
+    std::function<std::expected<void, sdk_error>(const nlohmann::json&)> transport_send_;
+    std::function<void()> transport_stop_;
+    std::function<std::expected<void, sdk_error>()> transport_wait_;
+    std::function<std::expected<bool, sdk_error>(std::chrono::milliseconds)> transport_wait_for_;
+    std::mutex mutex_;
+    lifecycle state_ = lifecycle::configuring;
+    connection protocol_ = connection::await_initialize;
     std::map<std::string, registered_resource> resources_;
-    std::map<std::string, registered_prompt> prompts_;
+    std::vector<std::shared_ptr<operation>> inflight_;
+    std::unique_ptr<detail::owned_executor> executor_;
 
-    std::atomic<int64_t> next_id_{1};
-    std::mutex promises_mutex_;
-    std::map<int64_t, std::promise<std::expected<nlohmann::json, error>>> promises_;
+    static std::expected<void, sdk_error> local_error(const char* message) {
+        return std::unexpected(sdk_error{sdk_errc::invalid_state, message});
+    }
+    static bool safe_text(const std::string& text) {
+        for (unsigned char ch : text) if ((ch < 32 && ch != '\t' && ch != '\n' && ch != '\r') || ch == 127) return false;
+        try { (void)nlohmann::json(text).dump(); return true; } catch (...) { return false; }
+    }
+    static response failure(json_rpc_id id, int code, const char* message) {
+        response reply; reply.id = std::move(id); reply.err = error{code, message}; return reply;
+    }
+    static response failure(json_rpc_id id, error_code code, const char* message) {
+        return failure(std::move(id), static_cast<int>(code), message);
+    }
+    void complete(const std::shared_ptr<operation>& op) noexcept {
+        std::lock_guard lock(mutex_); std::erase(inflight_, op);
+    }
+    bool emit(const response& reply) { return transport_send_(nlohmann::json(reply)).has_value(); }
+    bool serving() const noexcept { return state_ == lifecycle::starting || state_ == lifecycle::running; }
 
-    void handle_message(const nlohmann::json& msg) {
-        if (!msg.contains("method")) {
-            // It might be a response to something we sent
-            if (msg.contains("id")) {
-                response res = msg.get<response>();
-                if (std::holds_alternative<int64_t>(res.id)) {
-                    int64_t id = std::get<int64_t>(res.id);
-                    std::promise<std::expected<nlohmann::json, error>> prom;
-                    {
-                        std::lock_guard<std::mutex> lock(promises_mutex_);
-                        auto it = promises_.find(id);
-                        if (it != promises_.end()) {
-                            prom = std::move(it->second);
-                            promises_.erase(it);
-                        } else {
-                            return; // Unknown request ID
-                        }
-                    }
-
-                    if (res.err.has_value()) {
-                        prom.set_value(std::unexpected(*res.err));
-                    } else if (res.result.has_value()) {
-                        prom.set_value(*res.result);
-                    } else {
-                        prom.set_value(nlohmann::json::object());
-                    }
-                }
-            }
+    void receive(const nlohmann::json& wire) {
+        auto decoded = detail::decode_message(wire);
+        if (!decoded) {
+            if (wire.is_object() && wire.contains("method") && !wire.contains("id")) return;
+            bool ok = true;
+            { std::lock_guard lock(mutex_); if (serving()) ok = emit(decoded.error()); }
+            if (!ok) stop();
             return;
         }
-
-        if (msg.contains("id")) {
-            // It's a Request
-            request req = msg.get<request>();
-            handle_request(req);
-        } else {
-            // It's a Notification
-            notification notif = msg.get<notification>();
-            handle_notification(notif);
-        }
-    }
-
-    void handle_notification(const notification& notif) {
-        // We generally ignore notifications we don't care about
-        if (notif.method == "initialized") {
-            // Client has received initialization response
-        }
-    }
-
-    void handle_request(const request& req) {
-        // Run request handler in a detached thread so we don't block the transport reader
-        std::thread([this, req]() {
-            response res;
-            res.id = req.id;
-
-            try {
-                if (req.method == "initialize") {
-                    handle_initialize(req, res);
-                } else if (req.method == "tools/list") {
-                    handle_tools_list(req, res);
-                } else if (req.method == "tools/call") {
-                    handle_tools_call(req, res);
-                } else if (req.method == "resources/list") {
-                    handle_resources_list(req, res);
-                } else if (req.method == "resources/read") {
-                    handle_resources_read(req, res);
-                } else if (req.method == "prompts/list") {
-                    handle_prompts_list(req, res);
-                } else if (req.method == "prompts/get") {
-                    handle_prompts_get(req, res);
-                } else {
-                    res.err = error(error_code::method_not_found, "Method not found: " + req.method);
-                }
-            } catch (const std::exception& e) {
-                res.err = error(error_code::internal_error, e.what());
+        if (auto* note = std::get_if<notification>(&*decoded)) { notify(*note); return; }
+        auto* req = std::get_if<request>(&*decoded);
+        if (!req) return;
+        std::shared_ptr<operation> op;
+        bool close = false;
+        {
+            std::lock_guard lock(mutex_);
+            if (!serving() || protocol_ == connection::closing) return;
+            if (std::any_of(inflight_.begin(), inflight_.end(), [&](const auto& item) { return detail::same_request_id(item->id, req->id); })) {
+                (void)emit(failure(nullptr, error_code::invalid_request, "Duplicate in-flight request ID"));
+                protocol_ = connection::closing; close = true;
+            } else if (req->method == "initialize" || req->method == "ping") {
+                response reply; reply.id = req->id;
+                if (req->method == "ping") reply.result = nlohmann::json::object();
+                else reply = initialize(*req);
+                close = !emit(reply);
+            } else if (protocol_ != connection::ready) {
+                close = !emit(failure(req->id, error_code::invalid_request, "Server is not initialized"));
+            } else {
+                op = std::make_shared<operation>(req->id); inflight_.push_back(op);
             }
-
-            nlohmann::json j_res = res;
-            transport_send_(j_res);
-        }).detach();
+        }
+        if (close) { stop(); return; }
+        if (!op) return;
+        // Capture destruction retires IDs even for discarded queued work.
+        // Executor capture destructors never run under the server mutex.
+        auto done = std::make_shared<completion>(this, op);
+        auto queued = executor_->enqueue(req->id, [this, req = *req, op, done](const request_context& context) {
+            callback_scope scope(this);
+            { std::lock_guard lock(mutex_); if (op->cancelled || !serving()) return; }
+            response reply;
+            try { reply = application(req, context); }
+            catch (...) { reply = failure(req.id, error_code::internal_error, "Internal error"); }
+            bool ok = true;
+            {
+                // Cancellation and writer admission serialize on this lock.
+                std::lock_guard lock(mutex_);
+                if (!op->cancelled && serving()) ok = emit(reply);
+            }
+            if (!ok) stop();
+        });
+        if (!queued) {
+            bool ok = true;
+            {
+                std::lock_guard lock(mutex_);
+                if (!op->cancelled && serving()) {
+                    auto reply = failure(req->id, -32052, "Request queue is full");
+                    reply.err->data = nlohmann::json{{"reason", "queue_full"}}; ok = emit(reply);
+                }
+            }
+            if (!ok) stop();
+        }
     }
-
-    void handle_initialize(const request& /*req*/, response& res) {
-        std::shared_lock lock(mutex_);
+    response initialize(const request& req) {
+        if (protocol_ != connection::await_initialize) return failure(req.id, error_code::invalid_request, "Initialization already attempted");
+        if (!req.params || !req.params->is_object()) return failure(req.id, error_code::invalid_params, "Invalid initialize parameters");
+        const auto& p = *req.params;
+        if (!p.contains("protocolVersion") || !p["protocolVersion"].is_string() ||
+            !p.contains("capabilities") || !p["capabilities"].is_object() || !p.contains("clientInfo") || !p["clientInfo"].is_object() ||
+            !p["clientInfo"].contains("name") || !p["clientInfo"]["name"].is_string() ||
+            !p["clientInfo"].contains("version") || !p["clientInfo"]["version"].is_string())
+            return failure(req.id, error_code::invalid_params, "Invalid initialize parameters");
         nlohmann::json capabilities = nlohmann::json::object();
-        
-        if (!tools_.empty()) {
-            capabilities["tools"] = nlohmann::json::object();
-        }
-        if (!resources_.empty()) {
-            capabilities["resources"] = nlohmann::json::object();
-        }
-        if (!prompts_.empty()) {
-            capabilities["prompts"] = nlohmann::json::object();
-        }
-
-        res.result = nlohmann::json{
-            {"protocolVersion", "2024-11-05"},
-            {"capabilities", capabilities},
-            {"serverInfo", {
-                {"name", info_.name},
-                {"version", info_.version}
-            }}
-        };
+        if (!resources_.empty()) capabilities["resources"] = nlohmann::json::object();
+        response reply; reply.id = req.id;
+        reply.result = nlohmann::json{{"protocolVersion", "2025-11-25"}, {"capabilities", capabilities},
+            {"serverInfo", {{"name", info_.name}, {"version", info_.version}}}};
+        protocol_ = connection::await_initialized;
+        return reply;
     }
-
-    void handle_tools_list(const request& /*req*/, response& res) {
-        std::shared_lock lock(mutex_);
-        nlohmann::json tools_list = nlohmann::json::array();
-        for (const auto& [name, t] : tools_) {
-            tools_list.push_back(t.info);
-        }
-        res.result = nlohmann::json{
-            {"tools", tools_list}
-        };
-    }
-
-    void handle_tools_call(const request& req, response& res) {
-        if (!req.params.has_value() || !req.params->contains("name")) {
-            res.err = error(error_code::invalid_params, "Missing 'name' in tools/call params");
-            return;
-        }
-
-        std::string name = req.params->at("name").get<std::string>();
-        tool_callback callback;
+    void notify(const notification& note) {
+        std::shared_ptr<operation> cancelled;
         {
-            std::shared_lock lock(mutex_);
-            auto it = tools_.find(name);
-            if (it == tools_.end()) {
-                res.err = error(error_code::invalid_params, "Tool not found: " + name);
-                return;
+            std::lock_guard lock(mutex_);
+            if (!serving()) return;
+            if (note.method == "notifications/initialized") {
+                if (protocol_ == connection::await_initialized && (!note.params || note.params->is_object())) protocol_ = connection::ready;
+            } else if (note.method == "notifications/cancelled" && note.params && note.params->is_object() &&
+                note.params->contains("requestId") && detail::is_request_id((*note.params)["requestId"]) &&
+                (!note.params->contains("reason") || (*note.params)["reason"].is_string())) {
+                auto id = detail::read_json_rpc_id((*note.params)["requestId"]);
+                for (const auto& op : inflight_) if (detail::same_request_id(op->id, id)) { op->cancelled = true; cancelled = op; break; }
             }
-            callback = it->second.callback;
         }
-
-        nlohmann::json arguments = nlohmann::json::object();
-        if (req.params->contains("arguments")) {
-            arguments = req.params->at("arguments");
-        }
-
-        auto result = callback(arguments);
-        if (result.has_value()) {
-            res.result = nlohmann::json{
-                {"content", nlohmann::json::array({
-                    {
-                        {"type", "text"},
-                        {"text", result->dump()}
-                    }
-                })}
-            };
-            // Note: If the tool returns a string that isn't valid json, 
-            // the user should handle that, but for now we expect tool to return json 
-            // and we wrap it in content text block for MCP compliance.
-            // Wait, MCP tools usually return `content` array directly in some implementations, 
-            // but let's conform to standard: result is { content: [{type:"text", text: "..."}] }
-            // Let's improve this: If the user callback returns json object, we serialize it.
-            // If they want to return raw text, they can return json string.
-            if (result->is_string()) {
-                 res.result = nlohmann::json{
-                    {"content", nlohmann::json::array({
-                        {
-                            {"type", "text"},
-                            {"text", result->get<std::string>()}
-                        }
-                    })}
-                };
-            }
-        } else {
-            res.result = nlohmann::json{
-                {"content", nlohmann::json::array({
-                    {
-                        {"type", "text"},
-                        {"text", result.error().message}
-                    }
-                })},
-                {"isError", true}
-            };
-        }
+        if (cancelled) { callback_scope scope(this); executor_->cancel(cancelled->id); }
     }
-
-    void handle_resources_list(const request& /*req*/, response& res) {
-        std::shared_lock lock(mutex_);
-        nlohmann::json resources_list = nlohmann::json::array();
-        for (const auto& [uri, r] : resources_) {
-            resources_list.push_back(r.info);
-        }
-        res.result = nlohmann::json{
-            {"resources", resources_list}
-        };
-    }
-
-    void handle_resources_read(const request& req, response& res) {
-         if (!req.params.has_value() || !req.params->contains("uri")) {
-            res.err = error(error_code::invalid_params, "Missing 'uri' in resources/read params");
-            return;
-        }
-
-        std::string uri = req.params->at("uri").get<std::string>();
-        resource_callback callback;
-        std::optional<std::string> mimeType;
-        {
-            std::shared_lock lock(mutex_);
-            auto it = resources_.find(uri);
-            if (it == resources_.end()) {
-                res.err = error(error_code::invalid_params, "Resource not found: " + uri);
-                return;
+    response application(const request& req, const request_context& context) {
+        response reply; reply.id = req.id;
+        if (req.method == "resources/list") {
+            if (req.params && (!req.params->is_object() || (req.params->contains("cursor") && !(*req.params)["cursor"].is_string())))
+                return failure(req.id, error_code::invalid_params, "Invalid resource parameters");
+            auto list = nlohmann::json::array();
+            for (const auto& [uri, item] : resources_) list.push_back(item.descriptor);
+            reply.result = nlohmann::json{{"resources", std::move(list)}};
+        } else if (req.method == "resources/read") {
+            if (!req.params || !req.params->is_object() || !req.params->contains("uri") || !(*req.params)["uri"].is_string())
+                return failure(req.id, error_code::invalid_params, "Invalid resource parameters");
+            const auto found = resources_.find((*req.params)["uri"].get_ref<const std::string&>());
+            if (found == resources_.end()) return failure(req.id, -32002, "Resource not found");
+            auto result = found->second.handler(context);
+            if (!result) return failure(req.id, error_code::internal_error, "Internal error");
+            auto text = std::move(result->text);
+            if (!safe_text(text)) return failure(req.id, error_code::internal_error, "Internal error");
+            if (options_.filter_output) {
+                auto filtered = options_.filter_output(req.method, text, context);
+                if (!filtered || !safe_text(*filtered)) return failure(req.id, error_code::internal_error, "Internal error");
+                text = std::move(*filtered);
             }
-            callback = it->second.callback;
-            mimeType = it->second.info.mimeType;
-        }
-
-        auto content = callback();
-        std::string text_content;
-        if (content.is_string()) {
-            text_content = content.get<std::string>();
-        } else {
-            text_content = content.dump();
-        }
-
-        nlohmann::json resource_content = {
-            {"uri", uri},
-            {"text", text_content}
-        };
-        if (mimeType.has_value()) {
-            resource_content["mimeType"] = *mimeType;
-        }
-
-        res.result = nlohmann::json{
-            {"contents", nlohmann::json::array({ resource_content })}
-        };
-    }
-
-    void handle_prompts_list(const request& /*req*/, response& res) {
-        std::shared_lock lock(mutex_);
-        nlohmann::json prompts_list = nlohmann::json::array();
-        for (const auto& [name, p] : prompts_) {
-            prompts_list.push_back(p.info);
-        }
-        res.result = nlohmann::json{
-            {"prompts", prompts_list}
-        };
-    }
-
-    void handle_prompts_get(const request& req, response& res) {
-        if (!req.params.has_value() || !req.params->contains("name")) {
-            res.err = error(error_code::invalid_params, "Missing 'name' in prompts/get params");
-            return;
-        }
-
-        std::string name = req.params->at("name").get<std::string>();
-        prompt_callback callback;
-        {
-            std::shared_lock lock(mutex_);
-            auto it = prompts_.find(name);
-            if (it == prompts_.end()) {
-                res.err = error(error_code::invalid_params, "Prompt not found: " + name);
-                return;
-            }
-            callback = it->second.callback;
-        }
-
-        std::map<std::string, std::string> args;
-        if (req.params->contains("arguments")) {
-            for (const auto& [key, value] : req.params->at("arguments").items()) {
-                if (value.is_string()) {
-                    args[key] = value.get<std::string>();
-                } else {
-                    args[key] = value.dump();
-                }
-            }
-        }
-
-        auto result = callback(args);
-        res.result = nlohmann::json{
-            {"messages", result}
-        };
+            nlohmann::json content = {{"uri", found->second.descriptor.uri}, {"text", std::move(text)}};
+            if (found->second.descriptor.mimeType) content["mimeType"] = *found->second.descriptor.mimeType;
+            reply.result = nlohmann::json{{"contents", nlohmann::json::array({std::move(content)})}};
+        } else return failure(req.id, error_code::method_not_found, "Method not found");
+        return reply;
     }
 };
-
 } // namespace synapse
