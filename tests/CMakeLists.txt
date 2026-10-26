@@ -35,6 +35,12 @@ if(UNIX)
     catch_discover_tests(synapse_posix_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
 endif()
 
+if(WIN32)
+    add_executable(synapse_windows_tests windows_io.cpp)
+    target_link_libraries(synapse_windows_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
+    catch_discover_tests(synapse_windows_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
+endif()
+
 set(_consumer_arguments
     "-DSYNAPSE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
     "-DSYNAPSE_CONSUMER_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/consumer"
