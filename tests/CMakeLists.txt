@@ -71,3 +71,7 @@ catch_discover_tests(synapse_schema_adapter_tests TEST_PREFIX "synapse." PROPERT
 add_executable(synapse_stdio_tests stdio_transport.cpp)
 target_link_libraries(synapse_stdio_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
 catch_discover_tests(synapse_stdio_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
+
+add_executable(synapse_server_tests server_lifecycle.cpp server_ownership.cpp)
+target_link_libraries(synapse_server_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
+catch_discover_tests(synapse_server_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
