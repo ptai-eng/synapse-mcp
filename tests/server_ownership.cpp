@@ -5,14 +5,35 @@
 #include <future>
 #include <limits>
 #include <type_traits>
+#include <cstdlib>
+#include <new>
 #ifndef _WIN32
 #include <poll.h>
 #include <unistd.h>
 #endif
 
+namespace server_start_interruption {
+// Stop at the owned executor's allocation boundary, after local validation and
+// before transport startup. Disarm first so reentrant cleanup allocates normally.
+thread_local synapse::server* stop_on_executor_allocation = nullptr;
+}
+void* operator new(std::size_t size) {
+    if (size == sizeof(synapse::detail::owned_executor)) {
+        if (auto* owner = std::exchange(server_start_interruption::stop_on_executor_allocation, nullptr)) owner->stop();
+    }
+    if (auto* memory = std::malloc(size ? size : 1)) return memory;
+    throw std::bad_alloc();
+}
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* memory) noexcept { std::free(memory); }
+void operator delete[](void* memory) noexcept { std::free(memory); }
+void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
+void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
+
 namespace {
 struct counting_transport {
     int starts = 0;
+    int waits = 0;
     bool fail = false;
     std::function<void(const nlohmann::json&)> message;
     std::function<void(synapse::close_reason)> close;
@@ -30,7 +51,7 @@ struct counting_transport {
         std::lock_guard lock(mutex); output.push_back(wire); changed.notify_all(); return {};
     }
     void stop() noexcept { if (!stopped.exchange(true) && close) close(synapse::close_reason::requested_stop); }
-    std::expected<void, synapse::sdk_error> wait() { return {}; }
+    std::expected<void, synapse::sdk_error> wait() { ++waits; return {}; }
     std::expected<bool, synapse::sdk_error> wait_for(std::chrono::milliseconds) { return true; }
     nlohmann::json next() {
         std::unique_lock lock(mutex);
@@ -270,4 +291,120 @@ TEST_CASE("M1.ownership.destructor_joins_before_state_dies", "[M1][ownership]") 
     CHECK(returned);
     CHECK(t.stopped.load());
     CHECK(t.output.empty());
+}
+
+TEST_CASE("M1.ownership.interrupted_start_joins_partial_work", "[M1][ownership][review-fix]") {
+    SECTION("EOF during transport startup") {
+        struct early_close_transport : counting_transport {
+            std::thread terminal;
+            std::promise<void> release;
+            ~early_close_transport() { (void)wait(); }
+            std::expected<void, synapse::sdk_error> start(decltype(message) cb, decltype(close) closed = {}) {
+                (void)counting_transport::start(std::move(cb), std::move(closed));
+                std::promise<void> published;
+                auto done = published.get_future();
+                terminal = std::thread([this, published = std::move(published)]() mutable {
+                    close(synapse::close_reason::eof);
+                    published.set_value();
+                    release.get_future().wait();
+                });
+                done.wait();
+                return {};
+            }
+            std::expected<void, synapse::sdk_error> wait() {
+                ++waits;
+                if (terminal.joinable()) { release.set_value(); terminal.join(); }
+                return {};
+            }
+        } t;
+        synapse::server s(t);
+        REQUIRE_FALSE(s.start());
+        CHECK(t.waits == 1);
+        CHECK_FALSE(t.terminal.joinable());
+        CHECK_FALSE(s.start());
+        REQUIRE(s.wait());
+    }
+    SECTION("stop before transport startup") {
+        counting_transport t;
+        synapse::server s(t);
+        server_start_interruption::stop_on_executor_allocation = &s;
+        auto result = s.start();
+        server_start_interruption::stop_on_executor_allocation = nullptr;
+        REQUIRE_FALSE(result);
+        CHECK(t.starts == 0);
+        CHECK(t.waits == 1);
+        CHECK_FALSE(s.start());
+        REQUIRE(s.wait());
+    }
+}
+
+TEST_CASE("M1.ownership.callback_wait_is_instance_scoped", "[M1][ownership][review-fix]") {
+    counting_transport ta, tb;
+    synapse::server a(ta), b(tb);
+    b.stop();
+    std::promise<void> entered;
+    bool independent_wait = false, independent_timed_wait = false;
+    bool self_wait_rejected = false, self_timed_wait_rejected = false;
+    REQUIRE(a.register_resource(descriptor(), [&](const synapse::request_context& context) -> std::expected<synapse::resource_result, synapse::handler_error> {
+        std::stop_callback on_stop(context.stop, [&] {
+            independent_wait = b.wait().has_value();
+            independent_timed_wait = b.wait_for(0ms).value_or(false);
+            self_wait_rejected = !a.wait();
+            self_timed_wait_rejected = !a.wait_for(0ms);
+        });
+        std::mutex mutex;
+        std::condition_variable_any changed;
+        std::unique_lock lock(mutex);
+        entered.set_value(); changed.wait(lock, context.stop, [] { return false; });
+        return synapse::resource_result{"suppressed"};
+    }));
+    REQUIRE(a.start()); ta.ready(); ta.read(1);
+    REQUIRE(entered.get_future().wait_for(1s) == std::future_status::ready);
+    a.stop();
+    CHECK(independent_wait); CHECK(independent_timed_wait);
+    CHECK(self_wait_rejected); CHECK(self_timed_wait_rejected);
+    REQUIRE(a.wait());
+}
+
+TEST_CASE("M1.ownership.nested_callback_wait_checks_stack", "[M1][ownership][review-fix]") {
+    counting_transport ta, tb, tc;
+    synapse::server a(ta), b(tb), c(tc);
+    c.stop();
+    std::promise<void> entered_a, entered_b;
+    bool outer_rejected = false, nested_self_rejected = false, independent_wait = false;
+    bool joined_b_from_a = false;
+    REQUIRE(b.register_resource(descriptor(), [&](const synapse::request_context& context) -> std::expected<synapse::resource_result, synapse::handler_error> {
+        std::stop_callback on_stop(context.stop, [&] {
+            // A.stop -> A stop callback -> B.stop -> B stop callback -> A.
+            // Zero timeout distinguishes invalid_state from an allowed timeout
+            // without hanging a regression that checks only the stack top.
+            outer_rejected = !a.wait_for(0ms);
+            nested_self_rejected = !b.wait_for(0ms);
+            independent_wait = c.wait().has_value();
+        });
+        std::mutex mutex;
+        std::condition_variable_any changed;
+        std::unique_lock lock(mutex);
+        entered_b.set_value(); changed.wait(lock, context.stop, [] { return false; });
+        return synapse::resource_result{"suppressed"};
+    }));
+    REQUIRE(a.register_resource(descriptor(), [&](const synapse::request_context& context) -> std::expected<synapse::resource_result, synapse::handler_error> {
+        std::stop_callback on_stop(context.stop, [&] {
+            b.stop();
+            joined_b_from_a = b.wait().has_value();
+        });
+        std::mutex mutex;
+        std::condition_variable_any changed;
+        std::unique_lock lock(mutex);
+        entered_a.set_value(); changed.wait(lock, context.stop, [] { return false; });
+        return synapse::resource_result{"suppressed"};
+    }));
+    REQUIRE(a.start()); REQUIRE(b.start());
+    ta.ready(); tb.ready(); ta.read(1); tb.read(1);
+    REQUIRE(entered_a.get_future().wait_for(1s) == std::future_status::ready);
+    REQUIRE(entered_b.get_future().wait_for(1s) == std::future_status::ready);
+    a.stop();
+    CHECK(outer_rejected); CHECK(nested_self_rejected);
+    CHECK(independent_wait); CHECK(joined_b_from_a);
+    REQUIRE(a.wait()); REQUIRE(b.wait());
 }

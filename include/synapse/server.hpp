@@ -62,7 +62,7 @@ public:
                 executor_ = std::move(executor);
                 interrupted = state_ != lifecycle::starting;
             }
-            if (interrupted) { executor_->stop(); return local_error("Server stopped during startup"); }
+            if (interrupted) { stop(); (void)wait(); return local_error("Server stopped during startup"); }
             auto result = transport_start_([this](const auto& wire) {
                 callback_scope scope(this);
                 try { receive(wire); } catch (...) { stop(); }
@@ -73,7 +73,7 @@ public:
                 interrupted = state_ != lifecycle::starting;
                 if (!interrupted) state_ = lifecycle::running;
             }
-            if (interrupted) { stop(); return local_error("Server stopped during startup"); }
+            if (interrupted) { stop(); (void)wait(); return local_error("Server stopped during startup"); }
             return {};
         } catch (...) {
             stop(); (void)wait();
@@ -94,7 +94,7 @@ public:
         transport_stop_(); // A close callback may synchronously reenter stop.
     }
     std::expected<void, sdk_error> wait() {
-        if (active_) return local_error("Cannot wait inside SDK callback");
+        if (callback_scope::contains(this)) return local_error("Cannot wait inside SDK callback");
         if (auto result = transport_wait_(); !result) return result;
         detail::owned_executor* executor;
         { std::lock_guard lock(mutex_); executor = executor_.get(); }
@@ -103,7 +103,7 @@ public:
         return {};
     }
     std::expected<bool, sdk_error> wait_for(std::chrono::milliseconds timeout) {
-        if (active_) return std::unexpected(local_error("Cannot wait inside SDK callback").error());
+        if (callback_scope::contains(this)) return std::unexpected(local_error("Cannot wait inside SDK callback").error());
         const auto deadline = std::chrono::steady_clock::now() + (std::max)(timeout, std::chrono::milliseconds::zero());
         auto transport = transport_wait_for_(timeout);
         if (!transport || !*transport) return transport;
@@ -127,11 +127,20 @@ private:
         ~completion() { owner->complete(op); }
     };
     struct callback_scope {
-        server* previous = active_;
-        explicit callback_scope(server* value) { active_ = value; }
+        server* owner;
+        callback_scope* previous;
+        explicit callback_scope(server* value) noexcept : owner(value), previous(active_) { active_ = this; }
         ~callback_scope() { active_ = previous; }
+        callback_scope(const callback_scope&) = delete;
+        callback_scope& operator=(const callback_scope&) = delete;
+        static bool contains(const server* value) noexcept {
+            for (auto* scope = active_; scope; scope = scope->previous) {
+                if (scope->owner == value) return true;
+            }
+            return false;
+        }
     };
-    inline static thread_local server* active_ = nullptr;
+    inline static thread_local callback_scope* active_ = nullptr;
     server_info info_;
     server_options options_;
     std::function<std::expected<void, sdk_error>(stdio_transport::message_callback, stdio_transport::close_callback)> transport_start_;
