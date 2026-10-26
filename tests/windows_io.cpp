@@ -70,6 +70,18 @@ void exercise_lifecycle(private_pipe& input, private_pipe& output) {
     REQUIRE(::ReadFile(output.reader, bytes.data(), 1, &count, nullptr));
     io.request_stop();
 }
+
+void exercise_cancelled_lifecycle(private_pipe& input, private_pipe& output) {
+    auto opened = native_stdio::open(input.reader, output.writer);
+    REQUIRE(opened);
+    auto result = std::async(std::launch::async, [&] {
+        std::array<char, 1> bytes{};
+        return opened->read_some(bytes);
+    });
+    opened->request_stop();
+    REQUIRE(finish_cancel(*opened, result));
+    REQUIRE_FALSE(result.get());
+}
 } // namespace
 
 static_assert(!std::is_copy_constructible_v<native_stdio>);
@@ -175,11 +187,45 @@ TEST_CASE("M1.windows.eof_and_broken_pipe", "[M1][windows]") {
     REQUIRE(result.error().code == synapse::sdk_errc::io_error);
 }
 
+TEST_CASE("M1.windows.token_cancel_is_direction_local", "[M1][windows]") {
+    private_pipe input, output;
+    auto opened = native_stdio::open(input.reader, output.writer);
+    REQUIRE(opened);
+    const std::string bytes(1024 * 1024, 'w');
+    std::promise<void> entering;
+    auto started = entering.get_future();
+    auto writer = std::async(std::launch::async, [&] {
+        entering.set_value();
+        return opened->write_some(bytes);
+    });
+    const auto writer_started = started.wait_for(1s);
+    const auto writer_blocked = writer.wait_for(20ms);
+    std::stop_source stop;
+    auto reader = std::async(std::launch::async, [&] {
+        std::array<char, 1> buffer{};
+        return opened->read_some(buffer, stop.get_token());
+    });
+    stop.request_stop();
+    const bool reader_done = finish_cancel(*opened, reader);
+    const auto writer_still_blocked = writer.wait_for(20ms);
+    opened->request_stop();
+    const bool writer_done = finish_cancel(*opened, writer);
+    REQUIRE(writer_started == std::future_status::ready);
+    REQUIRE(writer_blocked == std::future_status::timeout);
+    REQUIRE(reader_done);
+    REQUIRE_FALSE(reader.get());
+    REQUIRE(writer_still_blocked == std::future_status::timeout);
+    REQUIRE(writer_done);
+    REQUIRE_FALSE(writer.get());
+}
+
 TEST_CASE("M1.windows.handle_cleanup", "[M1][windows]") {
     private_pipe input, output;
     exercise_lifecycle(input, output); // Warm up the CRT and Win32 paths first.
+    exercise_cancelled_lifecycle(input, output);
     const auto baseline = handle_count();
     for (int cycle = 0; cycle < 100; ++cycle) exercise_lifecycle(input, output);
+    for (int cycle = 0; cycle < 100; ++cycle) exercise_cancelled_lifecycle(input, output);
     REQUIRE(handle_count() == baseline);
     DWORD flags = 0;
     REQUIRE(::GetHandleInformation(input.reader, &flags));
