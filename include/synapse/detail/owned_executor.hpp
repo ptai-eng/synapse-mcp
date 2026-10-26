@@ -70,22 +70,31 @@ public:
         if (std::holds_alternative<std::nullptr_t>(id) || !call) {
             return std::unexpected(sdk_error{sdk_errc::invalid_state, "Invalid executor invocation"});
         }
-        std::lock_guard lock(mutex_);
-        if (stopping_) {
-            return std::unexpected(sdk_error{sdk_errc::invalid_state, "Executor admission is closed"});
-        }
-        if (active_ && same_request_id(active_->context.id, id)) {
-            return std::unexpected(sdk_error{sdk_errc::invalid_state, "Duplicate in-flight request ID"});
-        }
-        for (const auto& item : pending_) {
-            if (same_request_id(item->context.id, id)) {
+        // Both work construction (including its stop state) and list-node
+        // allocation can throw. Their invocation owners must outlive the lock
+        // scope so capture destructors can re-enter even on failure/rejection.
+        std::list<std::shared_ptr<work>> prepared;
+        prepared.push_back(std::make_shared<work>(std::move(id), std::move(call)));
+        const auto& prepared_id = prepared.front()->context.id;
+        {
+            std::lock_guard lock(mutex_);
+            if (stopping_) {
+                return std::unexpected(sdk_error{sdk_errc::invalid_state, "Executor admission is closed"});
+            }
+            if (active_ && same_request_id(active_->context.id, prepared_id)) {
                 return std::unexpected(sdk_error{sdk_errc::invalid_state, "Duplicate in-flight request ID"});
             }
+            for (const auto& item : pending_) {
+                if (same_request_id(item->context.id, prepared_id)) {
+                    return std::unexpected(sdk_error{sdk_errc::invalid_state, "Duplicate in-flight request ID"});
+                }
+            }
+            if (pending_.size() >= max_pending_) {
+                return std::unexpected(sdk_error{sdk_errc::resource_exhausted, "Executor queue is full"});
+            }
+            // Equal default allocators make this transfer allocation-free.
+            pending_.splice(pending_.end(), prepared);
         }
-        if (pending_.size() >= max_pending_) {
-            return std::unexpected(sdk_error{sdk_errc::resource_exhausted, "Executor queue is full"});
-        }
-        pending_.push_back(std::make_shared<work>(std::move(id), std::move(call)));
         changed_.notify_one();
         return {};
     }

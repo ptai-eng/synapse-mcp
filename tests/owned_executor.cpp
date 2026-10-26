@@ -7,13 +7,43 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdlib>
 #include <future>
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+namespace executor_allocation_fault {
+// Only the enqueue caller is affected. A failure disarms itself so cleanup and
+// reentry retain normal allocation behavior, including in the exception path.
+thread_local int remaining = -1;
+
+struct fail_after {
+    explicit fail_after(int count) { remaining = count; }
+    ~fail_after() { remaining = -1; }
+};
+} // namespace executor_allocation_fault
+
+void* operator new(std::size_t size) {
+    auto& remaining = executor_allocation_fault::remaining;
+    if (remaining == 0) {
+        remaining = -1;
+        throw std::bad_alloc();
+    }
+    if (remaining > 0) --remaining;
+    if (auto* memory = std::malloc(size == 0 ? 1 : size)) return memory;
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* memory) noexcept { std::free(memory); }
+void operator delete[](void* memory) noexcept { std::free(memory); }
+void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
+void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
 namespace {
 using namespace std::chrono_literals;
@@ -47,7 +77,144 @@ struct counted_lifetime {
     std::atomic<int>& destroyed;
     ~counted_lifetime() { ++destroyed; }
 };
+
+// The capture destructor must observe reentry completing before it returns.
+// Delegating reentry to a prestarted thread makes the broken implementation fail
+// within a bounded interval: returning releases its lock, and the probe then joins.
+// No detached thread or stranded executor remains on a regression/assertion.
+struct destructor_reentry_probe {
+    owned_executor& executor;
+    std::mutex mutex;
+    std::condition_variable changed;
+    bool requested = false;
+    bool completed = false;
+    bool completed_during_destruction = false;
+    std::atomic<int> destroyed{0};
+    std::jthread reentry;
+
+    explicit destructor_reentry_probe(owned_executor& owner)
+        : executor(owner), reentry([this] {
+            {
+                std::unique_lock lock(mutex);
+                changed.wait(lock, [this] { return requested; });
+            }
+            executor.cancel(number(999));
+            executor.stop();
+            {
+                std::lock_guard lock(mutex);
+                completed = true;
+            }
+            changed.notify_all();
+        }) {}
+
+    void request() {
+        {
+            std::lock_guard lock(mutex);
+            requested = true;
+        }
+        changed.notify_all();
+    }
+
+    void on_destroy() {
+        ++destroyed;
+        request();
+        std::unique_lock lock(mutex);
+        completed_during_destruction = changed.wait_for(lock, 1s, [this] { return completed; });
+    }
+
+    void join() {
+        if (reentry.joinable()) reentry.join();
+    }
+
+    ~destructor_reentry_probe() {
+        request();
+        join();
+    }
+};
+
+struct reenter_on_destroy {
+    destructor_reentry_probe& probe;
+    ~reenter_on_destroy() { probe.on_destroy(); }
+};
 } // namespace
+
+TEST_CASE("M1.executor.allocation_failure_releases_captures_outside_lock", "[M1][executor]") {
+    int allocation_failures = 0;
+    bool reached_success = false;
+    // Enumerate allocation positions instead of depending on a library's node or
+    // stop-state sizes. Exercise work ownership, stop-state and list allocations.
+    for (int position = 0; position != 16 && !reached_success; ++position) {
+        owned_executor executor;
+        destructor_reentry_probe probe(executor);
+        auto lifetime = std::make_shared<reenter_on_destroy>(probe);
+        owned_executor::invocation call = [lifetime](const synapse::request_context&) {};
+        lifetime.reset();
+        bool admitted = false;
+        bool allocation_failed = false;
+        {
+            executor_allocation_fault::fail_after fault(position);
+            try {
+                admitted = executor.enqueue(number(1), std::move(call)).has_value();
+            } catch (const std::bad_alloc&) {
+                allocation_failed = true;
+            }
+        }
+        executor.stop();
+        const auto joined = executor.wait();
+        probe.join();
+        INFO("enqueue allocation position: " << position);
+        REQUIRE(joined);
+        REQUIRE(probe.destroyed == 1);
+        REQUIRE(probe.completed_during_destruction);
+        if (allocation_failed) {
+            ++allocation_failures;
+        } else {
+            REQUIRE(admitted);
+            reached_success = true;
+        }
+    }
+    REQUIRE(reached_success);
+    REQUIRE(allocation_failures >= 3);
+}
+
+TEST_CASE("M1.executor.rejected_admission_releases_captures_outside_lock", "[M1][executor]") {
+    enum class rejection { closed, active_duplicate, pending_duplicate, full };
+    for (const auto reason : {rejection::closed, rejection::active_duplicate,
+                              rejection::pending_duplicate, rejection::full}) {
+        gate blocked;
+        std::promise<void> started;
+        auto future = started.get_future();
+        owned_executor executor(1);
+        destructor_reentry_probe probe(executor);
+        release_on_exit cleanup{blocked};
+        if (reason == rejection::closed) {
+            executor.stop();
+        } else {
+            REQUIRE(executor.enqueue(number(1), [&](const synapse::request_context&) {
+                started.set_value();
+                blocked.wait();
+            }));
+            REQUIRE(future.wait_for(2s) == std::future_status::ready);
+            REQUIRE(executor.enqueue(number(2), [](const synapse::request_context&) {}));
+        }
+        const auto id = reason == rejection::active_duplicate ? 1 :
+                        reason == rejection::pending_duplicate ? 2 : 3;
+        auto lifetime = std::make_shared<reenter_on_destroy>(probe);
+        owned_executor::invocation call = [lifetime](const synapse::request_context&) {};
+        lifetime.reset();
+        const auto result = executor.enqueue(number(id), std::move(call));
+        executor.stop();
+        blocked.release();
+        const auto joined = executor.wait();
+        probe.join();
+        REQUIRE(joined);
+        REQUIRE_FALSE(result);
+        REQUIRE(result.error().code == (reason == rejection::full ?
+            synapse::sdk_errc::resource_exhausted : synapse::sdk_errc::invalid_state));
+        REQUIRE(probe.destroyed == 1);
+        REQUIRE(probe.completed_during_destruction);
+    }
+}
 
 TEST_CASE("M1.executor.serial_and_bounded", "[M1][executor]") {
     gate blocked;
