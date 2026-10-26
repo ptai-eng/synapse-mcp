@@ -13,14 +13,17 @@ Plan: [plan.md](plan.md). Checklist: [todo.md](todo.md).
 
 | Task | State | Evidence |
 |---|---|---|
-| T01 | Complete; reviewed | `73506f0`; 12/12; `build/execution/T01-review.md` |
-| T02 | Complete; reviewed | `eb66bb3`; 18/18; `build/execution/T02-review.md` |
-| T03 | Implemented; review in progress | `b830540`; 5/5 plus standalone headers |
-| T04 | In progress | `build/execution/T04-report.md` pending |
-| T05 | In progress; qualification blocker known | `build/execution/T05-preparation-report.md` |
-| T06-T10 | Pending | Next independent runtime tasks |
-| T11-T21 | Deferred by user | Review after T10 first |
-
+| T01 | Complete; reviewed | `73506f0`; MSVC `/bigobj` correction `8f4f539`; regression gates pass |
+| T02 | Complete; reviewed | `eb66bb3`; fresh consumer verified |
+| T03 | Complete; reviewed | `b830540`; contract and standalone headers |
+| T04 | Complete; reviewed | `02becce`; umbrella macro integration fix `6c85b53` |
+| T05 | Adapter approved; qualification BLOCKED | `23310aa`; local 295/295; official 1295/1302 on Windows and Linux, zero skips |
+| T06 | Complete; fix reviewed | `a1e56ff` + `84423ae`; allocation-failure cleanup fixed |
+| T07 | Complete; reviewed | `3b29e12`; WSL GCC15.2 POSIX10/10; 36/36 selected regression |
+| T08 | Complete; reviewed | `94f58ac`; native MSVC9cases/978assertions; 31/31 selected regression |
+| T09 | Complete; reviewed | `8fd8d25`; Windows16/16, Linux14/14 |
+| T10 | Runtime complete; reviewed under T05 exception | `bcfcb0e`, `56ef7ff`, `2138f90`; 18 cases/502 assertions; Windows 81/81, WSL 80/80 excluding the separately failing official gate |
+| T11-T21 | Deferred by user | Stop after T10 checkpoint for user review; README last |
 ## Reviews and decisions
 
 T01 and T02 passed scoped compliance and quality review with no blocking findings. T02 has a nonblocking single-config build-type forwarding caveat, to carry into final checkpoint verification.
@@ -62,3 +65,30 @@ User explicitly requested stopping now to preserve remaining usage. No further i
 - T05 resumes its existing adapter implementation and real failing qualification gate; no backend/regex redesign or tool migration is authorized in this checkpoint.
 - T08 Windows I/O implementation started against T07's committed common interface. The user closed Docker; Windows verification proceeds independently. Linux verification remains pending unless another available Linux environment can run it.
 - Separate build trees avoid the previous Ninja recovery warnings: T05 uses build/m1; T06 fix uses build/m1-msvc; T08 uses build/t08-msvc. Shared CMake edits/commits remain serialized.
+
+### T10 integration boundary
+
+Ruling: Prepare T10 lifecycle source/tests in parallel with T09's stable transport-interface implementation, but defer T10 completion until T09 passes its verification/review gate. Files and build trees are disjoint; the cost if wrong is limited integration rework.
+
+Ruling: Exercise application-worker ownership through a minimal typed static resource list/read path and register_resource in T10. Tools/prompts migration stays deferred to T11-T14, and tools must not be advertised while the T05 gate fails. This uses a real public request/handler boundary without introducing a test-only public dispatch API. Full resource/profile qualification still belongs to T13; T10 is not a complete M1 claim. The cost if wrong is bounded route refactoring when the later slices land.
+
+
+### Final checkpoint verification
+
+- Ruling: MSVC C1128 in the actual full adapter translation unit requires `/bigobj`; propagate it only for Windows/MSVC through qualified jsoncons, keeping the GNU Windows option unchanged. Implemented in `8f4f539` and reviewed as correct scope. Cost if wrong: a harmless compiler object-format option on this compiler, not schema semantics.
+- Ruling: Public umbrella integration exposed Windows min/max macros in decoder numeric_limits calls; three parenthesized calls in `6c85b53` preserve caller macros. The umbrella include now has a compile regression in ownership tests. Cost if wrong: a small portable syntax correction, no protocol change.
+- T05 now ran through the actual adapter on MSVC and WSL GCC15.2: exactly seven mandatory failures each, all 1302 cases executed. Detailed gate exits are 8. No case is skipped or marked expected-pass. Default CTest therefore remains failing until T05 is resolved.
+- Initial whole-checkpoint Linux run passed 77/77 tests excluding only the separately executed failing official gate. Final runtime fix adds three cases; rerun once fix round2 is committed. Windows full build first exposed C1128; corrected schema target now builds, final full checkpoint still pending.
+- T10 review P2s (interrupted-start cleanup, per-instance nested callback waits) fixed by `56ef7ff`; ASTRA re-review approves production fixes and compiler guard. New test-only assertion-unwind lifetime problem is being fixed in round2. Re-review only that cleanup delta afterward.
+- Remaining before user handoff: round2 commit/re-review; final full Windows+WSL build/CTest excluding only explicit official gate; raw Python wire smoke against both examples; persist checkpoint summary/status and stop before T11. No README edit or push.
+
+### T10 handoff completed, 2026-10-26
+
+- Task T10: fix round 1/5 (2 production findings addressed; new test-only lifetime finding open; commit `56ef7ff`).
+- Task T10: fix round 2/5 (ordered assertion-unwind cleanup addressed, 0 open; commit `2138f90`). Scoped rereview approves spec compliance and quality in `build/execution/T10-fix2-review.md`.
+- Task T10: runtime complete (implementation/review fixes `bcfcb0e..2138f90`, task review clean), under the recorded exception for T05. No full-M1 qualification claim.
+- Final all-target builds, including both examples, succeeded on native Windows/MSVC 19.44 and Ubuntu WSL/GCC15.2. Selected CTest passed Windows **81/81** and Linux **80/80**. The only excluded test was the separately executed, known-failing official schema gate; full default CTest remains failing.
+- Raw Python child-process probes passed on both actual examples: `2025-11-25` counteroffer, initialized flow, resources/list/read, ping, malformed-envelope/parse recovery, notification silence, uint64/string IDs, EOF exit code0 within2s without forced cleanup. Saved wire transcripts have empty stderr. This is smoke evidence, not official-client/host or full T18 verification.
+- T05 remains BLOCKED: 1295/1302 mandatory cases pass on both native MSVC and WSL; seven genuine failures, zero skips. Source-quality review is approved, qualification is not. T11 must wait.
+- [Checkpoint report](checkpoint-t10.md) is the review entrypoint. ADR status labels now match the implemented runtime and failed schema gate. README remains untouched, changes stay local, `.understand-anything/` is preserved, and Docker was not restarted.
+- All requested work stops here for user review. T11-T21 remain unchecked.

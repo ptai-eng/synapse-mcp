@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: Execution in progress through the user-requested T10 checkpoint; see [execution.md](execution.md) for evidence and blockers. Read [plan.md](plan.md), its interfaces and both implementation ADRs first. Do not mark a task complete from document review alone.
+Status: Paused for the user's review at the [T10 checkpoint](checkpoint-t10.md). Runtime through T10 is implemented and reviewed; T05 qualification remains blocked. See [execution.md](execution.md) for evidence and decisions. Read [plan.md](plan.md), its interfaces and both implementation ADRs first. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -48,61 +48,65 @@ Depends: T03. Files (4): `include/synapse/protocol.hpp`, `include/synapse/detail
 
 Depends: T01, T03. Files (4): `include/synapse/detail/schema_validator.hpp`, `tests/schema_adapter.cpp`, `cmake/SchemaTestSuite.cmake`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.schema.registration_and_validation` covers invalid metaschema, absent/unsupported dialect, offline refs/dynamic refs, required unknown vocabularies, unevaluated items/properties, prefix items, branches, NUL cases and unchanged input. Non-finite/binary/discarded SDK JSON never changes silently during conversion.
-- [ ] Run schema tests and the pinned official draft2020-12 suite; record failures rather than creating a skip list.
-- [ ] Implement ADR-003's exact `compile_schema`/`validate` interface, offline catalog and sanitized failure categories. Format remains annotation by default; no defaults or network/file retrieval.
+- [x] RED: `M1.schema.registration_and_validation` covers invalid metaschema, absent/unsupported dialect, offline refs/dynamic refs, required unknown vocabularies, unevaluated items/properties, prefix items, branches, NUL cases and unchanged input. Non-finite/binary/discarded SDK JSON never changes silently during conversion.
+- [x] Run schema tests and the pinned official draft2020-12 suite; record failures rather than creating a skip list.
+- [x] Implement ADR-003's exact `compile_schema`/`validate` interface, offline catalog and sanitized failure categories. Format remains annotation by default; no defaults or network/file retrieval.
 - [ ] GREEN: every non-optional selected suite case on Linux and Windows, plus adapter regressions. A mandatory failure blocks T11 and requires an explicit recorded correction/decision.
 - [ ] Review and commit `feat: add qualified schema validation`.
+
+Checkpoint: adapter source approved and committed as `23310aa`; local regressions pass, but qualification remains 1295/1302 on Windows and Linux. The final two items remain open: source approval does not qualify the backend. T11 is blocked.
 
 ## T06: Own and cancel application work
 
 Depends: T03. Files (3): `include/synapse/detail/owned_executor.hpp`, `tests/owned_executor.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.executor.serial_and_bounded` asserts max active callbacks equals 1 and the pending limit is 16. `M1.executor.stop_owns_active_work` gates a callback, requires `wait_for(50ms)==false`, then releases it and checks completion/destruction exactly once.
-- [ ] Run executor tests; failures must be assertions or missing symbols, not harness crashes.
-- [ ] Implement the queue/cancel/stop/wait contracts from plan.md. Cancel queued calls without invoking them; an active call receives its stop token. Worker-side wait returns `invalid_state`; never self-join or detach.
-- [ ] GREEN: executor group with repeated start/stop construction and all earlier tests.
-- [ ] Review and commit `fix: own queued application work`.
+- [x] RED: `M1.executor.serial_and_bounded` asserts max active callbacks equals 1 and the pending limit is 16. `M1.executor.stop_owns_active_work` gates a callback, requires `wait_for(50ms)==false`, then releases it and checks completion/destruction exactly once.
+- [x] Run executor tests; failures must be assertions or missing symbols, not harness crashes.
+- [x] Implement the queue/cancel/stop/wait contracts from plan.md. Cancel queued calls without invoking them; an active call receives its stop token. Worker-side wait returns `invalid_state`; never self-join or detach.
+- [x] GREEN: executor group with repeated start/stop construction and all earlier tests.
+- [x] Review and commit `fix: own queued application work`.
 
 ## T07: Make POSIX byte I/O interruptible
 
 Depends: T03. Files (4): `include/synapse/detail/native_stdio.hpp`, `include/synapse/detail/stdio_posix.hpp`, `tests/posix_io.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.posix.cancel_idle_read`, `partial_write` and `closed_stdout` exercise private pipe endpoints; the read cancels with the peer still open, all bytes survive partial writes and broken output does not deliver fatal SIGPIPE.
-- [ ] Run only the POSIX cases on Linux; mark this path not run on Windows.
-- [ ] Implement the common native byte contract and POSIX poll/wake/nonblocking loops. Restore changed descriptor flags and use writer-thread signal masking, not a global SIGPIPE handler.
-- [ ] GREEN: POSIX group, repeated endpoint cleanup and earlier tests. Endpoint originals remain valid after owned duplicates close.
-- [ ] Review and commit `fix: interrupt POSIX standard streams`.
+- [x] RED: `M1.posix.cancel_idle_read`, `partial_write` and `closed_stdout` exercise private pipe endpoints; the read cancels with the peer still open, all bytes survive partial writes and broken output does not deliver fatal SIGPIPE.
+- [x] Run only the POSIX cases on Linux; mark this path not run on Windows.
+- [x] Implement the common native byte contract and POSIX poll/wake/nonblocking loops. Restore changed descriptor flags and use writer-thread signal masking, not a global SIGPIPE handler.
+- [x] GREEN: POSIX group, repeated endpoint cleanup and earlier tests. Endpoint originals remain valid after owned duplicates close.
+- [x] Review and commit `fix: interrupt POSIX standard streams`.
 
 ## T08: Make Windows byte I/O interruptible
 
 Depends: T07's common interface. Files (3): `include/synapse/detail/stdio_windows.hpp`, `tests/windows_io.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.windows.cancel_before_read`, `cancel_blocked_write` and `handle_cleanup` control the check-to-I/O race and blocked pipes; repeated lifecycles return handle counts to a warmed-up baseline.
-- [ ] Run on the declared Windows toolset, not through a POSIX emulation result.
-- [ ] Implement owned duplicated pipe endpoints and true Win32 thread handles. Retry cancellation until I/O completion before closing handles; reject unsupported stdio types rather than promising device cancellation.
-- [ ] GREEN: Windows group with cancellation before/during I/O and earlier tests; do not cast MinGW native handles or use PeekNamedPipe as a nonblocking guarantee.
-- [ ] Review and commit `fix: interrupt Windows standard streams`.
+- [x] RED: `M1.windows.cancel_before_read`, `cancel_blocked_write` and `handle_cleanup` control the check-to-I/O race and blocked pipes; repeated lifecycles return handle counts to a warmed-up baseline.
+- [x] Run on the declared Windows toolset, not through a POSIX emulation result.
+- [x] Implement owned duplicated pipe endpoints and true Win32 thread handles. Retry cancellation until I/O completion before closing handles; reject unsupported stdio types rather than promising device cancellation.
+- [x] GREEN: Windows group with cancellation before/during I/O and earlier tests; do not cast MinGW native handles or use PeekNamedPipe as a nonblocking guarantee.
+- [x] Review and commit `fix: interrupt Windows standard streams`.
 
 ## T09: Bound stdio framing and output
 
 Depends: T07-T08. Files (3): `include/synapse/transport.hpp`, `tests/stdio_transport.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.stdio.framing` checks fragmented UTF-8 JSON lines, malformed JSON, frame/depth limits, clean stdout and encoded output size. `M1.stdio.backpressure_stop` fills output and requires stop/wait to finish without the peer reading.
-- [ ] Run the stdio group using controlled endpoints; retain failure evidence.
-- [ ] Implement ADR-002's transport start/send/stop/wait interfaces, reader/writer ownership and close notification. Check limits before unbounded accumulation; flush already-queued output for at most 250ms before aborting SDK I/O.
-- [ ] GREEN: stdio group and existing example/client compilation; their compilation does not promote experimental behavior to verified support.
-- [ ] Review and commit `fix: bound stdio framing and shutdown`.
+- [x] RED: `M1.stdio.framing` checks fragmented UTF-8 JSON lines, malformed JSON, frame/depth limits, clean stdout and encoded output size. `M1.stdio.backpressure_stop` fills output and requires stop/wait to finish without the peer reading.
+- [x] Run the stdio group using controlled endpoints; retain failure evidence.
+- [x] Implement ADR-002's transport start/send/stop/wait interfaces, reader/writer ownership and close notification. Check limits before unbounded accumulation; flush already-queued output for at most 250ms before aborting SDK I/O.
+- [x] GREEN: stdio group and existing example/client compilation; their compilation does not promote experimental behavior to verified support.
+- [x] Review and commit `fix: bound stdio framing and shutdown`.
 
 ## T10: Implement the owned server lifecycle
 
 Depends: T04, T05, T06, T09. Files (5): `include/synapse/server.hpp`, `tests/server_lifecycle.cpp`, `tests/server_ownership.cpp`, `tests/CMakeLists.txt`, `examples/simple_server.cpp`.
 
-- [ ] RED: `M1.lifecycle.negotiate_2025` requires initialize -> `2025-11-25` -> initialized -> ready, counteroffers unsupported versions and answers ping. Pre-ready calls, duplicate in-flight IDs and initialized out of order cannot invoke handlers. Ownership tests assert frozen registration, no post-destruction callbacks and nonblocking callback-side stop. Cancellation tests cover queued/active/late IDs, no notification acknowledgement and no cancellation of initialize.
-- [ ] Run lifecycle/ownership groups and observe failures before migration.
-- [ ] Use the typed contracts and owned executor; transport/state outlive the owner-thread join. Remove experimental server `send_request`/outgoing promises and detached workers. Handle cancellation as ADR-002 specifies. Update the old server example only as needed to keep compilation consistent.
-- [ ] GREEN: lifecycle/ownership groups plus accumulated tests; callback-side wait errors and owner `wait_for` timeouts leave state alive.
-- [ ] Review and commit `feat: implement the M1 server lifecycle`.
+- [x] RED: `M1.lifecycle.negotiate_2025` requires initialize -> `2025-11-25` -> initialized -> ready, counteroffers unsupported versions and answers ping. Pre-ready calls, duplicate in-flight IDs and initialized out of order cannot invoke handlers. Ownership tests assert frozen registration, no post-destruction callbacks and nonblocking callback-side stop. Cancellation tests cover queued/active/late IDs, no notification acknowledgement and no cancellation of initialize.
+- [x] Run lifecycle/ownership groups and observe failures before migration.
+- [x] Use the typed contracts and owned executor; transport/state outlive the owner-thread join. Remove experimental server `send_request`/outgoing promises and detached workers. Handle cancellation as ADR-002 specifies. Update the old server example only as needed to keep compilation consistent.
+- [x] GREEN: lifecycle/ownership groups plus accumulated tests; callback-side wait errors and owner `wait_for` timeouts leave state alive.
+- [x] Review and commit `feat: implement the M1 server lifecycle`.
+
+Checkpoint: scoped runtime completion under the recorded T05 exception, with minimal resource list/read handlers; this does not waive T05 or complete M1. Production `bcfcb0e`, review fixes `56ef7ff` and `2138f90`; final task review approved.
 
 ## T11: Complete the tool slice
 
@@ -216,12 +220,9 @@ Depends: T20 and all checkpoint evidence. Files (5): `README.md`, `docs/migratio
 
 ## Checkpoint record
 
-- [ ] Dependency/consumer: T01-T03 evidence reviewed.
+- [x] Dependency/consumer: T01-T03 evidence reviewed.
 - [ ] Boundary/schema/executor: T04-T06 evidence reviewed.
-- [ ] I/O: T07-T09 evidence reviewed on both supported platforms.
+- [x] I/O: T07-T09 evidence reviewed on both supported platforms.
 - [ ] Methods: T10-T14 evidence reviewed.
 - [ ] Reference/interop: T15-T18 evidence reviewed.
 - [ ] Release evidence: T19-T21 meet every acceptance criterion; unavailable checks remain explicit blockers to their support claims.
-
-
-

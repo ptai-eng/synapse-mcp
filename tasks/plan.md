@@ -14,6 +14,8 @@
 
 Planning is complete when this document, the task checklist and decision records agree. **No runtime implementation, dependency qualification, host verification or conformance run has happened in this planning step.** All runtime tasks start unchecked.
 
+Execution update (2026-10-26): see the [T10 checkpoint](checkpoint-t10.md) and [execution ledger](execution.md) for the implemented runtime and outstanding schema qualification. The paragraph above records the original planning baseline.
+
 Use an implementation agent and a fresh reviewer for each task. Serialize edits to shared headers and CMake files; parallelize independent investigations/tests only after their shared interfaces exist. Checkpoints require evidence and review, not repeated authorization for work the user has already delegated. Do not publish releases, push commits or configure a user's global MCP catalog as part of this plan.
 
 ## Global constraints

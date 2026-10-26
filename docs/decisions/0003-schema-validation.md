@@ -1,7 +1,8 @@
 # ADR-003: A pinned JSON Schema backend with an explicit dependency correction
 
-- Status: Accepted implementation design; qualification not executed
+- Status: Adapter implemented and reviewed; qualification BLOCKED (7/1302 mandatory cases fail)
 - Date: 2026-10-25
+- Qualification checkpoint: [T10 review record](../../tasks/checkpoint-t10.md), 2026-10-26
 - Applies to: M1's MCP `2025-11-25` tool-input validation
 - Related: [ADR-001](0001-product-and-protocol.md), [M1 specification](../../specs/001-native-stdio-foundation/spec.md), [constitution](../../.specify/memory/constitution.md)
 

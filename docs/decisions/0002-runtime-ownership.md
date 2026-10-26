@@ -1,7 +1,8 @@
 # ADR-002: Owned stdio work and cooperative shutdown
 
-- Status: Accepted design; not implemented
+- Status: Runtime implemented through T10; full M1 qualification pending
 - Date: 2026-10-25
+- Implementation checkpoint: [T10 review record](../../tasks/checkpoint-t10.md), 2026-10-26
 - Scope: [M1 native stdio specification](../../specs/001-native-stdio-foundation/spec.md)
 - Product and revision: [ADR-001](0001-product-and-protocol.md)
 
