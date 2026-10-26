@@ -19,11 +19,11 @@ inline bool is_wire_error(const nlohmann::json& value) {
     }
     const auto& code = value.at("code");
     if (code.is_number_unsigned()) {
-        return code.get<uint64_t>() <= static_cast<uint64_t>(std::numeric_limits<int>::max());
+        return code.get<uint64_t>() <= static_cast<uint64_t>((std::numeric_limits<int>::max)());
     }
     if (code.is_number_integer()) {
         const auto number = code.get<int64_t>();
-        return number >= std::numeric_limits<int>::min() && number <= std::numeric_limits<int>::max();
+        return number >= (std::numeric_limits<int>::min)() && number <= (std::numeric_limits<int>::max)();
     }
     return false;
 }
