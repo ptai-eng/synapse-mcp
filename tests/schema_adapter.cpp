@@ -326,6 +326,33 @@ TEST_CASE("M1.schema.resource_query_identity", "[M1][schema][adapter]") {
     for (auto& validation : validations) CHECK(validation.get());
 }
 
+
+TEST_CASE("M1.schema.query_dialect_identity", "[M1][schema][adapter]") {
+    const auto supported_meta = [](const std::string& identifier) {
+        return json{{"$schema",dialect},{"$id",identifier},{"$vocabulary",{
+            {"https://json-schema.org/draft/2020-12/vocab/core",true},
+            {"https://json-schema.org/draft/2020-12/vocab/validation",true}}}};
+    };
+    const std::string first="https://test.invalid/meta?v=1", second="https://test.invalid/meta?v=2";
+    schema_catalog catalog{{first,supported_meta(first)},{second,supported_meta(second)}};
+    for (const auto& identifier : {first,second}) {
+        check_instance(json{{"$schema",identifier},{"type","integer"}},42,true,catalog);
+        check_instance(json{{"$schema",identifier},{"type","integer"}},"PRIVATE",false,catalog);
+        const json nested{{"$id","https://test.invalid/root"},{"$defs",{
+            {"a",{{"type","number"}}},
+            {"b",{{"$id","https://test.invalid/child"},{"$schema",identifier},{"type","integer"}}}}},
+            {"$ref","https://test.invalid/child"}};
+        check_instance(nested,42,true,catalog);
+        check_instance(nested,"PRIVATE",false,catalog);
+    }
+    // Distinct queries must not resolve to a queryless or sibling dialect.
+    catalog[second]["$vocabulary"]["https://PRIVATE.invalid/vocabulary"] = true;
+    check_instance(json{{"$schema",first},{"type","integer"}},42,true,catalog);
+    rejects_schema(json{{"$schema",second},{"type","integer"}},catalog);
+    rejects_schema(json{{"$schema","https://test.invalid/meta?v=missing"}},catalog);
+    rejects_schema(json{{"$schema","https://test.invalid/meta"}},catalog);
+}
+
 TEST_CASE("M1.schema.official_draft2020_12", "[M1][schema][schema-suite]") {
     namespace fs = std::filesystem;
     const fs::path suite(SYNAPSE_SCHEMA_TEST_SUITE_DIR);

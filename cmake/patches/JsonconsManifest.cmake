@@ -1,11 +1,12 @@
 # Frozen whole-file SHA256 identities for jsoncons v1.10.0, ADR-004.
 set(SYNAPSE_JSONCONS_FILES
-    keyword_validator.hpp
-    keyword_validator_factory.hpp
-    format_validators.hpp
-    schema_validator.hpp
-    schema_validator_factory_base.hpp
-    eval_context.hpp
+    common/keyword_validator.hpp
+    common/keyword_validator_factory.hpp
+    common/format_validators.hpp
+    common/schema_validator.hpp
+    common/schema_validator_factory_base.hpp
+    common/eval_context.hpp
+    json_schema_factory.hpp
 )
 set(SYNAPSE_JSONCONS_PRE_0 "bcaae280d2537edb582732ce1512f0019bbbf95c5e165e152d7797d6feb432dc")
 set(SYNAPSE_JSONCONS_POST_0 "cf7cff3185370d129f9972bfb6fd5922e09cfbe361f92ea77b7dbc5cdf22bd65")
@@ -19,3 +20,5 @@ set(SYNAPSE_JSONCONS_PRE_4 "30fcc7917f83a0c1fb45fcf4d27c92d2c6f99c505ffa5f78c98c
 set(SYNAPSE_JSONCONS_POST_4 "e91228f934858d90356ae7096f011355e45996a3350bed97686dcd0fd9e4e5d7")
 set(SYNAPSE_JSONCONS_PRE_5 "e3971ee2071702bd87d0331edfd03fa2ee30f0d1d71744aea79a403bdc0ca506")
 set(SYNAPSE_JSONCONS_POST_5 "746fd6d0f01713a584055e4aecc7e92adfd6996a29fad0f913a9bdb41d16f388")
+set(SYNAPSE_JSONCONS_PRE_6 "38fdc3213f0cbdbe34cc31bfb216a9d8e78b31acd14c355b53f5705117ea31de")
+set(SYNAPSE_JSONCONS_POST_6 "f6e6238214aba10288cdd1a2188d106b83f898c64d4c028b28568229065e4593")

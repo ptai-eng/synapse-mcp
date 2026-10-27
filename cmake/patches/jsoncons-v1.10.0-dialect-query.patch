@@ -1,0 +1,5 @@
+--- a/include/jsoncons_ext/jsonschema/json_schema_factory.hpp
++++ b/include/jsoncons_ext/jsonschema/json_schema_factory.hpp
+@@ -170 +170 @@
+-                Json meta_sch = (*it)(uri.base());
++                Json meta_sch = (*it)(jsoncons::uri(uri, jsoncons::uri_fragment_part, ""));
