@@ -8,6 +8,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <new>
 #include <stdexcept>
 #include <vector>
 #include <string>
@@ -76,8 +77,8 @@ struct connection {
 }
 
 TEST_CASE("M1.stdio.framing", "[M1][stdio]") {
-    connection c;
     std::atomic<int> messages{0};
+    connection c;
     REQUIRE(c.transport.start([&](const nlohmann::json& j) {
         if (j == nlohmann::json{{"text", "\xE2\x82\xAC"}}) ++messages;
     }));
@@ -90,9 +91,30 @@ TEST_CASE("M1.stdio.framing", "[M1][stdio]") {
     REQUIRE(c.output.read_line() == "{\"error\":{\"code\":-32700,\"message\":\"Parse error\"},\"id\":null,\"jsonrpc\":\"2.0\"}\n");
 }
 
-TEST_CASE("M1.stdio.backpressure_stop", "[M1][stdio]") {
+TEST_CASE("M1.stdio.numeric_overflow_recovers", "[M1][stdio]") {
+    const auto number = GENERATE("1e1000", "-1e1000", "1E+1000", "-1E+1000");
+    std::atomic<int> messages{0}, closes{0};
+    std::atomic<synapse::close_reason> reason{synapse::close_reason::io_error};
     connection c;
+    CAPTURE(number);
+    REQUIRE(c.transport.start([&](const nlohmann::json& message) {
+        if (message == nlohmann::json{{"jsonrpc", "2.0"}, {"id", 2}, {"method", "ping"}})
+            ++messages;
+    }, [&](auto why) { reason = why; ++closes; }));
+    c.input.write(std::string("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{\"x\":") +
+        number + "}}\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}\n");
+    pipe_pair::close(c.input.writer);
+    REQUIRE(c.transport.wait_for(1s).value());
+    CHECK(messages == 1);
+    CHECK(closes == 1);
+    CHECK(reason == synapse::close_reason::eof);
+    CHECK(c.output.read_line() == "{\"error\":{\"code\":-32700,\"message\":\"Parse error\"},\"id\":null,\"jsonrpc\":\"2.0\"}\n");
+    CHECK(c.output.read_line(10ms).empty());
+}
+
+TEST_CASE("M1.stdio.backpressure_stop", "[M1][stdio]") {
     std::atomic<int> closes{0};
+    connection c;
     REQUIRE(c.transport.start([](const auto&) {}, [&](synapse::close_reason) { ++closes; }));
     REQUIRE(c.transport.send(std::string(512 * 1024, 'x')));
     const auto before = std::chrono::steady_clock::now();
@@ -109,9 +131,9 @@ TEST_CASE("M1.stdio.frame_limits", "[M1][stdio]") {
     synapse::stdio_options options;
     options.max_frame_bytes = 7;
     SECTION("exact frame excludes LF") {
-        connection c(options);
         std::atomic<int> seen{0};
         std::atomic<synapse::close_reason> reason{synapse::close_reason::io_error};
+        connection c(options);
         REQUIRE(c.transport.start([&](const auto&) { ++seen; }, [&](auto why) { reason=why; }));
         c.input.write("{\"a\":1}\n");
         pipe_pair::close(c.input.writer);
@@ -120,9 +142,9 @@ TEST_CASE("M1.stdio.frame_limits", "[M1][stdio]") {
         CHECK(reason == synapse::close_reason::eof);
     }
     SECTION("one byte beyond closes before callback") {
-        connection c(options);
         std::atomic<int> seen{0};
         std::atomic<synapse::close_reason> reason{synapse::close_reason::eof};
+        connection c(options);
         REQUIRE(c.transport.start([&](const auto&) { ++seen; }, [&](auto why) { reason=why; }));
         c.input.write("{\"a\":10}");
         REQUIRE(c.transport.wait_for(1s).value());
@@ -134,9 +156,9 @@ TEST_CASE("M1.stdio.frame_limits", "[M1][stdio]") {
 TEST_CASE("M1.stdio.depth_before_parse", "[M1][stdio]") {
     synapse::stdio_options options;
     options.max_json_depth = 1;
-    connection c(options);
     std::atomic<int> seen{0};
     std::atomic<synapse::close_reason> reason{synapse::close_reason::eof};
+    connection c(options);
     REQUIRE(c.transport.start([&](const auto&) { ++seen; }, [&](auto why) { reason=why; }));
     // Braces and escaped quotes inside a string do not add container levels.
     c.input.write("{\"a\":\"[{\\\"\"}\n");
@@ -197,9 +219,9 @@ TEST_CASE("M1.stdio.queue_includes_active_frame_and_LF", "[M1][stdio]") {
 }
 
 TEST_CASE("M1.stdio.idle_stop_and_first_close", "[M1][stdio]") {
-    connection c;
     std::atomic<int> closes{0};
     std::atomic<synapse::close_reason> reason{synapse::close_reason::eof};
+    connection c;
     REQUIRE(c.transport.start([](const auto&) {}, [&](auto why) { reason=why; ++closes; }));
     REQUIRE_FALSE(c.transport.wait_for(5ms).value());
     c.transport.stop();
@@ -214,9 +236,9 @@ TEST_CASE("M1.stdio.idle_stop_and_first_close", "[M1][stdio]") {
 }
 
 TEST_CASE("M1.stdio.eof_closes_once_and_flushes", "[M1][stdio]") {
-    connection c;
     std::atomic<int> closes{0};
     std::atomic<synapse::close_reason> reason{synapse::close_reason::io_error};
+    connection c;
     REQUIRE(c.transport.start([&](const auto&) { (void)c.transport.send("reply"); },
         [&](auto why) { reason=why; ++closes; }));
     c.input.write("{}\n");
@@ -245,8 +267,8 @@ TEST_CASE("M1.stdio.flush_deadline", "[M1][stdio]") {
 }
 
 TEST_CASE("M1.stdio.callback_wait_is_invalid", "[M1][stdio]") {
-    connection c;
     std::atomic<int> rejected{0};
+    connection c;
     REQUIRE(c.transport.start([&](const auto&) {
         auto waited = c.transport.wait();
         if (!waited && waited.error().code == synapse::sdk_errc::invalid_state) ++rejected;
@@ -263,12 +285,17 @@ TEST_CASE("M1.stdio.callback_wait_is_invalid", "[M1][stdio]") {
 }
 
 TEST_CASE("M1.stdio.callback_exceptions_are_contained", "[M1][stdio]") {
-    const bool parse_exception = GENERATE(false, true);
-    connection c;
+    const int exception_kind = GENERATE(0, 1, 2, 3);
     std::atomic<int> closes{0};
     std::atomic<synapse::close_reason> reason{synapse::close_reason::eof};
-    REQUIRE(c.transport.start([parse_exception](const auto&) {
-        if (parse_exception) (void)nlohmann::json::parse("bad");
+    connection c;
+    CAPTURE(exception_kind);
+    REQUIRE(c.transport.start([exception_kind](const auto&) {
+        if (exception_kind == 1 || exception_kind == 2) {
+            const auto value = nlohmann::json::parse(exception_kind == 1 ? "bad" : "1e1000");
+            (void)value;
+        }
+        if (exception_kind == 3) throw std::bad_alloc{};
         throw std::runtime_error("private callback details");
     },
         [&](auto why) { reason=why; ++closes; throw std::runtime_error("private close details"); }));
@@ -280,8 +307,8 @@ TEST_CASE("M1.stdio.callback_exceptions_are_contained", "[M1][stdio]") {
 }
 
 TEST_CASE("M1.stdio.broken_output", "[M1][stdio]") {
-    connection c;
     std::atomic<synapse::close_reason> reason{synapse::close_reason::eof};
+    connection c;
     REQUIRE(c.transport.start([](const auto&) {}, [&](auto why) { reason=why; }));
     pipe_pair::close(c.output.reader);
     REQUIRE(c.transport.send("data"));
@@ -333,9 +360,13 @@ struct transport_io_gate {
 }
 TEST_CASE("M1.stdio.windows_cancel_before_io", "[M1][stdio]") {
     const bool writing = GENERATE(false, true);
-    connection c;
     transport_io_gate gate(writing);
     auto entered = gate.entered.get_future();
+    connection c;
+    struct release_before_join {
+        transport_io_gate& gate;
+        ~release_before_join() { gate.open(); }
+    } release{gate};
     REQUIRE(c.transport.start([](const auto&) {}));
     if (writing) REQUIRE(c.transport.send(std::string(512 * 1024, 'x')));
     const auto reached = entered.wait_for(1s);

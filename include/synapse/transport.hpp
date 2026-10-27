@@ -249,8 +249,16 @@ private:
         if (line.empty()) return true;
         if (excessive_depth(line)) { begin_close(close_reason::protocol_limit); return false; }
         nlohmann::json value;
+        bool parse_failed = false;
         try { value = nlohmann::json::parse(line); }
-        catch (const nlohmann::json::parse_error&) {
+        catch (const nlohmann::json::parse_error&) { parse_failed = true; }
+        catch (const nlohmann::json::out_of_range& error) {
+            // Only the parser's unrepresentable-number rejection is malformed
+            // input. Other range and allocation failures keep their own path.
+            if (error.id != 406) throw;
+            parse_failed = true;
+        }
+        if (parse_failed) {
             const auto diagnostic = nlohmann::json{{"jsonrpc", "2.0"}, {"id", nullptr},
                 {"error", {{"code", -32700}, {"message", "Parse error"}}}};
             if (!send(diagnostic)) { begin_close(close_reason::protocol_limit); return false; }
