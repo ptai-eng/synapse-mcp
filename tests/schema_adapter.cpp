@@ -2,6 +2,7 @@
 #include <synapse/detail/schema_validator.hpp>
 
 #include <algorithm>
+#include <future>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -176,6 +177,153 @@ TEST_CASE("M1.schema.registration_and_validation", "[M1][schema][adapter]") {
         CHECK(result.error().kind == validation_failure_kind::engine_failure);
         CHECK(owned.validate(1));
     }
+}
+
+
+TEST_CASE("M1.schema.unicode_evaluation", "[M1][schema][adapter]") {
+    const std::string greek = "\xcf\x80", cjk = "\xe4\xb8\xad", supplementary = "\xf0\x90\x90\x80";
+    const json letters{{"pattern",R"(^\p{Letter}+$)"}};
+    for (const auto& value : {std::string("Hello"),greek,cjk,supplementary}) check_instance(letters,value,true);
+    check_instance(letters,"42",false);
+    check_instance(json{{"pattern",R"(^\p{Script=Greek}+$)"}},greek,true);
+    check_instance(json{{"pattern",R"(^\p{General_Category=Lu}+$)"}},"ABC",true);
+    for (const auto pattern : {R"(^\P{Letter}+$)",R"(^[^\p{Letter}]+$)"}) {
+        check_instance(json{{"pattern",pattern}},"123",true);
+        check_instance(json{{"pattern",pattern}},greek,false);
+    }
+    check_instance(json{{"pattern",R"(^[\p{Letter}0-9]{2}$)"}},greek+"2",true);
+    check_instance(json{{"pattern","^.$"}},supplementary,true);
+    check_instance(json{{"pattern","^.$"}},std::string("e\xcc\x81"),false);
+    check_instance(json{{"pattern","^.{2}$"}},greek+supplementary,true);
+    check_instance(json{{"pattern",R"(^\u{10400}$)"}},supplementary,true);
+    check_instance(json{{"pattern",R"(^\uD801\uDC00$)"}},supplementary,true);
+    check_instance(json{{"pattern",R"(^[\u03B1-\u03C9]+$)"}},greek,true);
+    check_instance(json{{"pattern",R"(^(\p{Letter})\1$)"}},greek+greek,true);
+    check_instance(json{{"pattern",R"(^(?=\p{Letter})(?!\d).$)"}},greek,true);
+    check_instance(json{{"pattern",R"(\p{Letter})"}},"12"+greek+"34",true);
+    check_instance(json{{"pattern",R"(^\\p\{Letter\}$)"}},R"(\p{Letter})",true);
+    const std::string nul("a\0",2);
+    check_instance(json{{"pattern",R"(\p{Letter}$)"}},nul+greek,true);
+    check_instance(json{{"pattern",nul+greek}},nul+greek,true);
+    check_instance(json{{"pattern",nul+greek}},"a",false);
+    const auto key = nul+greek;
+    const json object_schema{{"patternProperties",{{R"(\p{Letter}$)",{{"type","integer"}}},
+        {"^a",{{"minimum",2}}}}},{"unevaluatedProperties",false}};
+    check_instance(object_schema,json{{key,2}},true);
+    check_instance(object_schema,json{{key,1}},false);
+    check_instance(object_schema,json{{key,"PRIVATE"}},false);
+    check_instance(object_schema,json{{key,2},{"42",2}},false);
+    for (const auto pattern : {"[PRIVATE","(","\\","[z-a]","a{3,2}",R"(\p{PRIVATE})",
+             R"(\p{Script=PRIVATE})",R"(\p{Letter)",R"(\u{XYZ})"})
+        rejects_schema(json{{"pattern",pattern}});
+    check_instance(json{{"anyOf",json::array({letters,json{{"const",42}}})}},greek,true);
+    check_instance(json{{"oneOf",json::array({letters,json{{"type","string"}}})}},greek,false);
+    check_instance(json{{"not",letters}},greek,false);
+    check_instance(json{{"allOf",json::array({letters,json{{"maxLength",1}}})}},greek,true);
+    check_instance(json{{"if",letters},{"then",{{"maxLength",1}}},{"else",{{"const","12"}}}},greek+greek,false);
+    check_instance(json{{"if",letters},{"then",{{"maxLength",1}}},{"else",{{"const","12"}}}},"12",true);
+    check_instance(json{{"contains",letters}},json::array({"42",greek}),true);
+    check_instance(json{{"propertyNames",letters}},json{{greek,1}},true);
+    check_instance(json{{"properties",{{"x",letters}}}},json{{"x","42"}},false);
+    check_instance(json{{"$defs",{{"letters",letters}}},{"$ref","#/$defs/letters"}},greek,true);
+    check_instance(json{{"$ref","https://test.invalid/letters"}},greek,true,
+        {{"https://test.invalid/letters",letters}});
+}
+
+TEST_CASE("M1.schema.fragment_resource_lifetime", "[M1][schema][adapter]") {
+    for (int entry_kind : {0,1,2}) {
+        const std::string entry = entry_kind ? "#entry" : "#/$defs/entry";
+        json resource = json::parse(R"({
+          "$id":"https://test.invalid/canonical", "const":false,
+          "$defs":{
+            "entry":{"$anchor":"entry", "$ref":"nested#/$defs/entry"},
+            "length":{"$dynamicAnchor":"length","maxLength":2},
+            "nested":{"$id":"nested", "const":false,"$defs":{
+              "entry":{"$dynamicRef":"#length"},
+              "length":{"$dynamicAnchor":"length","maxLength":3}}}
+          }})");
+        if (entry_kind == 2) {
+            resource["$defs"]["entry"].erase("$anchor");
+            resource["$defs"]["entry"]["$dynamicAnchor"] = "entry";
+        }
+        // Retrieval alias differs from canonical identity; the root itself has no $id.
+        schema_catalog catalog{{"https://test.invalid/alias",resource}};
+        json root{{"$ref","https://test.invalid/alias"+entry}};
+        auto compiled = compile_schema(root,catalog);
+        REQUIRE(compiled);
+        catalog.clear(); resource = nullptr; root = nullptr;
+        CHECK(compiled->validate("hi"));
+        CHECK_FALSE(compiled->validate("hey"));
+        auto owned = std::move(*compiled);
+        CHECK(owned.validate("hi"));
+        CHECK_FALSE(owned.validate("hey"));
+    }
+    // A nested resource's anchors never enter an enclosing resource's dictionary.
+    auto schema = json::parse(R"({"$id":"https://test.invalid/base","$ref":"#/$defs/entry",
+      "$defs":{"entry":{"$dynamicRef":"target#length"},
+        "unvisited":{"$id":"other","$dynamicAnchor":"length","maxLength":1},
+        "target":{"$id":"target","$dynamicAnchor":"length","maxLength":3}}})");
+    check_instance(schema,"hey",true);
+    check_instance(schema,"four",false);
+    // A dynamicRef initially resolving an ordinary anchor stays static.
+    schema = json::parse(R"({"$id":"https://test.invalid/base","$dynamicAnchor":"length",
+      "$ref":"#/$defs/entry","$defs":{"entry":{"$dynamicRef":"target#length"},
+        "target":{"$id":"target","$anchor":"length","maxLength":3}}})");
+    check_instance(schema,"hey",true);
+    check_instance(schema,"four",false);
+}
+
+
+
+TEST_CASE("M1.schema.dynamic_branch_isolation", "[M1][schema][adapter]") {
+    auto schema = json::parse(R"({"$id":"https://test.invalid/base",
+      "anyOf":[{"$ref":"strict#/$defs/entry"},{"$ref":"loose#/$defs/entry"}],
+      "$defs":{
+        "strict":{"$id":"strict","$defs":{"entry":{"$ref":"common#entry"},
+          "length":{"$dynamicAnchor":"length","maxLength":1}}},
+        "loose":{"$id":"loose","$defs":{"entry":{"$ref":"common#entry"},
+          "length":{"$dynamicAnchor":"length","maxLength":3}}},
+        "common":{"$id":"common","$defs":{"entry":{"$anchor":"entry","$dynamicRef":"#length"},
+          "length":{"$dynamicAnchor":"length","maxLength":2}}}}})");
+    check_instance(schema,"hey",true);
+    check_instance(schema,"four",false);
+    schema["oneOf"] = schema["anyOf"];
+    schema.erase("anyOf");
+    check_instance(schema,"hey",true);
+    check_instance(schema,"a",false);
+}
+
+TEST_CASE("M1.schema.resource_query_identity", "[M1][schema][adapter]") {
+    const std::string first = "https://test.invalid/resource?kind=letter";
+    const std::string second = "https://test.invalid/resource?kind=integer";
+    schema_catalog catalog{
+        {first,json{{"$id",first},{"$defs",{{"entry",{{"$anchor","entry"},{"pattern",R"(^\p{Letter}+$)"}}}}}}},
+        {second,json{{"$id",second},{"$defs",{{"entry",{{"$anchor","entry"},{"type","integer"}}}}}}}
+    };
+    const json root{{"type","object"},{"properties",{
+        {"letters",{{"$ref",first+"#entry"}}},{"number",{{"$ref",second+"#entry"}}}}}};
+    check_instance(root,json{{"letters","abc"},{"number",42}},true,catalog);
+    check_instance(root,json{{"letters","42"},{"number",42}},false,catalog);
+    check_instance(root,json{{"letters","abc"},{"number","abc"}},false,catalog);
+    for (const auto& uri : {std::string("urn:example:letters?+CCResolve:cc=uk"),
+                           std::string("urn:example:letters?=kind=letter")}) {
+        check_instance(json{{"$ref",uri+"#/$defs/entry"}},"abc",true,
+            {{uri,json{{"$id",uri},{"$defs",{{"entry",{{"pattern",R"(^\p{Letter}+$)"}}}}}}}});
+    }
+    check_instance(json{{"$ref","https://test.invalid/no-id?kind=integer#/$defs/entry"}},42,true,
+        {{"https://test.invalid/no-id?kind=integer",json{{"$defs",{{"entry",{{"type","integer"}}}}}}}});
+    auto compiled = compile_schema(root,catalog);
+    REQUIRE(compiled);
+    catalog.clear();
+    std::vector<std::future<bool>> validations;
+    for (int worker=0; worker<4; ++worker)
+        validations.push_back(std::async(std::launch::async,[&] {
+            for (int repeat=0; repeat<30; ++repeat)
+                if (!compiled->validate(json{{"letters","abc"},{"number",42}}) ||
+                    compiled->validate(json{{"letters","42"},{"number",42}})) return false;
+            return true;
+        }));
+    for (auto& validation : validations) CHECK(validation.get());
 }
 
 TEST_CASE("M1.schema.official_draft2020_12", "[M1][schema][schema-suite]") {

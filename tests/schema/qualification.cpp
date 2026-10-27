@@ -202,13 +202,68 @@ void properties_walk_nul() {
             "properties walk must use full keys and leave unmatched NUL keys alone");
 }
 
+void unicode_codepoints() {
+    const auto letters = compile(jsoncons::json::parse(R"({"pattern":"^\\p{Letter}+$"})"));
+    require(letters.is_valid(jsoncons::json("\xcf\x80")), "Greek letter must match Unicode property");
+    require(!letters.is_valid(jsoncons::json("42")), "digits must not match Letter");
+    const auto point = compile(jsoncons::json::parse(R"({"pattern":"^.$"})"));
+    require(point.is_valid(jsoncons::json("\xf0\x90\x90\x80")), "dot consumes one supplementary code point");
+    require(!point.is_valid(jsoncons::json("e\xcc\x81")), "combining sequence has two code points");
+}
+
+void dynamic_fragment() {
+    const auto schema = compile(jsoncons::json::parse(R"({
+      "$id":"https://test.invalid/base", "$ref":"first#/$defs/stuff",
+      "$defs":{
+        "first":{"$id":"first", "const":false, "$defs":{
+          "stuff":{"$ref":"second#/$defs/stuff"}, "length":{"maxLength":1}}},
+        "second":{"$id":"second", "const":false, "$defs":{
+          "stuff":{"$ref":"third#/$defs/stuff"},
+          "length":{"$dynamicAnchor":"length","maxLength":2}}},
+        "third":{"$id":"third", "const":false, "$defs":{
+          "stuff":{"$dynamicRef":"#length"},
+          "length":{"$dynamicAnchor":"length","maxLength":3}}}
+      }})"));
+    require(schema.is_valid(jsoncons::json("hi")), "fragment entry must not validate unrelated resource root");
+    require(!schema.is_valid(jsoncons::json("hey")), "fragment entry must register sibling dynamic anchors");
+    int visits = 0;
+    schema.walk(jsoncons::json("hi"), [&](const std::string& keyword, const jsoncons::json& subschema,
+            const jsoncons::uri&, const jsoncons::json&, const jsoncons::jsonpointer::json_pointer&) {
+        if (keyword == "maxLength") {
+            require(subschema.at("maxLength") == 2, "walk must select the same dynamic resource");
+            ++visits;
+        }
+        return jsoncons::jsonschema::walk_state::advance;
+    });
+    require(visits == 1, "walk must visit selected anchor once");
+}
+
+
+void unicode_format() {
+    const auto options = jsoncons::jsonschema::evaluation_options{}
+        .default_version(jsoncons::jsonschema::schema_version::draft202012())
+        .require_format_validation(true);
+    const auto schema = jsoncons::jsonschema::make_json_schema(
+        jsoncons::json::parse(R"({"format":"regex"})"),options);
+    require(schema.is_valid(jsoncons::json(R"(^\p{Letter}+$)")), "regex format uses Unicode engine");
+    require(!schema.is_valid(jsoncons::json(R"(\p{PRIVATE})")), "regex format rejects unknown properties");
+    require(schema.is_valid(jsoncons::json(std::string("a\0z",3))), "regex format preserves NUL expression length");
+    require(!schema.is_valid(jsoncons::json(std::string("a\0[",3))), "regex format detects invalid syntax after NUL");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     try {
         require(argc == 2, "one qualification case name is required");
         const std::string name(argv[1]);
-        if (name == "pattern_nul") {
+        if (name == "unicode_format") {
+            unicode_format();
+        } else if (name == "unicode_codepoints") {
+            unicode_codepoints();
+        } else if (name == "dynamic_fragment") {
+            dynamic_fragment();
+        } else if (name == "pattern_nul") {
             pattern_nul();
         } else if (name == "pattern_properties_nul") {
             pattern_properties_nul();

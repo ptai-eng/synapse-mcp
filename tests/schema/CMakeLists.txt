@@ -26,7 +26,7 @@ endif()
 add_executable(synapse_schema_qualification qualification.cpp)
 target_link_libraries(synapse_schema_qualification PRIVATE jsoncons::jsoncons)
 target_compile_features(synapse_schema_qualification PRIVATE cxx_std_17)
-foreach(_case IN ITEMS pattern_nul pattern_properties_nul additional_properties_false_nul
+foreach(_case IN ITEMS unicode_format unicode_codepoints dynamic_fragment pattern_nul pattern_properties_nul additional_properties_false_nul
         additional_properties_schema_nul additional_properties_walk_nul
         properties_validate_nul properties_walk_nul
         unevaluated_properties_false_nul unevaluated_properties_schema_nul)
@@ -55,52 +55,48 @@ add_test(NAME synapse.schema.regex_disabled
     COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/regex-disabled-$<CONFIG>.cmake")
 set_tests_properties(synapse.schema.regex_disabled PROPERTIES TIMEOUT 60)
 
+
 get_target_property(QUALIFIED_JSONCONS_SOURCE_DIR jsoncons SYNAPSE_JSONCONS_SOURCE_DIR)
 if(QUALIFIED_JSONCONS_SOURCE_DIR)
-    get_filename_component(QUALIFICATION_PATCH_SCRIPT
-        "${CMAKE_CURRENT_LIST_DIR}/../../cmake/ApplyJsonconsPatch.cmake" ABSOLUTE)
-    set(_correction_test [=[
-set(source "@QUALIFIED_JSONCONS_SOURCE_DIR@")
-set(script "@QUALIFICATION_PATCH_SCRIPT@")
-set(relative "include/jsoncons_ext/jsonschema/common/keyword_validator.hpp")
-# Whole-file postimage fixture, independently frozen when producing the patch.
-set(expected "64e377f5b8434231887cfb25cb68cf58e657336c5a65998bc971188c66643fa2")
-file(SHA256 "${source}/${relative}" before)
-if(NOT before STREQUAL expected)
-    message(FATAL_ERROR "Qualification postimage digest differs from its regression fixture")
-endif()
-if(TEST_MISMATCH)
-    set(source "@CMAKE_CURRENT_BINARY_DIR@/mismatched-jsoncons")
-    file(MAKE_DIRECTORY "${source}/include/jsoncons_ext/jsonschema/common")
-    file(READ "@QUALIFIED_JSONCONS_SOURCE_DIR@/${relative}" text)
-    file(CONFIGURE OUTPUT "${source}/${relative}"
-        CONTENT "${text}\n// deliberate qualification mismatch\n" @ONLY NEWLINE_STYLE UNIX)
-    file(SHA256 "${source}/${relative}" before)
-    execute_process(COMMAND "@CMAKE_COMMAND@" "-DJSONCONS_SOURCE_DIR=${source}" -P "${script}"
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
-    if(result EQUAL 0 OR NOT "${output}${error}" MATCHES "preimage/postimage mismatch")
-        message(FATAL_ERROR "Mismatched source was not rejected for provenance: ${output}${error}")
-    endif()
-else()
-    foreach(attempt RANGE 1 2)
-        execute_process(COMMAND "@CMAKE_COMMAND@" "-DJSONCONS_SOURCE_DIR=${source}" -P "${script}"
-            RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
-        if(NOT result EQUAL 0 OR NOT output MATCHES "exact postimage verified; no changes")
-            message(FATAL_ERROR "Exact-postimage reapplication failed: ${output}${error}")
+    get_target_property(QUALIFIED_SRELL_SOURCE_DIR synapse_srell SYNAPSE_SRELL_SOURCE_DIR)
+    foreach(mode IN ITEMS idempotent mismatch)
+        if(mode STREQUAL "idempotent")
+            set(name patch_idempotent)
+        else()
+            set(name preimage_mismatch)
         endif()
+        add_test(NAME synapse.schema.${name} COMMAND "${CMAKE_COMMAND}"
+            "-DJSONCONS_SOURCE_DIR=${QUALIFIED_JSONCONS_SOURCE_DIR}"
+            "-DSRELL_SOURCE_DIR=${QUALIFIED_SRELL_SOURCE_DIR}"
+            "-DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}" "-DTEST_MODE=${mode}"
+            -P "${CMAKE_CURRENT_LIST_DIR}/../../cmake/TestDependencyProvenance.cmake")
+        set_tests_properties(synapse.schema.${name} PROPERTIES TIMEOUT 120)
     endforeach()
-endif()
-file(SHA256 "${source}/${relative}" after)
-if(NOT before STREQUAL after)
-    message(FATAL_ERROR "Correction qualification unexpectedly changed its source")
+    foreach(feature IN ITEMS DATA PROPERTY ICASE)
+        set(target synapse_schema_unicode_disabled_${feature})
+        add_library(${target} OBJECT EXCLUDE_FROM_ALL qualification.cpp)
+        target_link_libraries(${target} PRIVATE jsoncons::jsoncons)
+        target_compile_features(${target} PRIVATE cxx_std_17)
+        target_compile_definitions(${target} PRIVATE SRELL_NO_UNICODE_${feature}=1)
+        set(_unicode_test [=[
+execute_process(COMMAND "@CMAKE_COMMAND@" --build "@CMAKE_BINARY_DIR@"
+    --target @target@ --config "$<CONFIG>"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+if(result EQUAL 0 OR NOT "${output}${error}" MATCHES "Synapse schema validation requires SRELL Unicode support")
+    message(FATAL_ERROR "Disabled Unicode compile did not fail at guard: ${output}${error}")
 endif()
 ]=])
-    string(CONFIGURE "${_correction_test}" _correction_test @ONLY)
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/qualify-correction.cmake" "${_correction_test}")
-    add_test(NAME synapse.schema.patch_idempotent
-        COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/qualify-correction.cmake")
-    add_test(NAME synapse.schema.preimage_mismatch
-        COMMAND "${CMAKE_COMMAND}" -DTEST_MISMATCH=ON -P "${CMAKE_CURRENT_BINARY_DIR}/qualify-correction.cmake")
-    set_tests_properties(synapse.schema.patch_idempotent synapse.schema.preimage_mismatch
-        PROPERTIES TIMEOUT 30)
+        string(CONFIGURE "${_unicode_test}" _unicode_test @ONLY)
+        file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/unicode-${feature}-$<CONFIG>.cmake" CONTENT "${_unicode_test}")
+        add_test(NAME synapse.schema.unicode_disabled_${feature} COMMAND "${CMAKE_COMMAND}"
+            -P "${CMAKE_CURRENT_BINARY_DIR}/unicode-${feature}-$<CONFIG>.cmake")
+        set_tests_properties(synapse.schema.unicode_disabled_${feature} PROPERTIES TIMEOUT 60)
+    endforeach()
+endif()
+
+if(QUALIFIED_JSONCONS_SOURCE_DIR)
+    add_test(NAME synapse.schema.reject_parent_sources COMMAND "${CMAKE_COMMAND}"
+        "-DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}" "-DTEST_GENERATOR=${CMAKE_GENERATOR}"
+        -P "${CMAKE_CURRENT_LIST_DIR}/../../cmake/TestParentDependencies.cmake")
+    set_tests_properties(synapse.schema.reject_parent_sources PROPERTIES TIMEOUT 120)
 endif()

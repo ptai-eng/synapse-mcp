@@ -54,5 +54,16 @@ function(assert_header_only_subdirectory directory)
 endfunction()
 assert_header_only_subdirectory("${SYNAPSE_SOURCE_DIR}")
 
+# Dependencies must expose their own header roots, never the consumer's root/include.
+get_target_property(jsoncons_source jsoncons SYNAPSE_JSONCONS_SOURCE_DIR)
+get_target_property(jsoncons_includes jsoncons INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(srell_source synapse_srell SYNAPSE_SRELL_SOURCE_DIR)
+get_target_property(srell_includes synapse_srell INTERFACE_INCLUDE_DIRECTORIES)
+if(NOT jsoncons_includes STREQUAL "${jsoncons_source}/include"
+        OR NOT srell_includes STREQUAL "${srell_source}/srell-src")
+    message(FATAL_ERROR "Dependency include roots leaked outside the owned checkouts")
+endif()
+
+
 add_executable(synapse_consumer main.cpp)
 target_link_libraries(synapse_consumer PRIVATE synapse::mcp)

@@ -34,6 +34,12 @@ using json = jsoncons::json;
 using evaluator = jsoncons::jsonschema::json_schema<json>;
 namespace engine = jsoncons::jsonschema;
 
+// A query (including URN r/q components) belongs to resource identity.
+// jsoncons::uri::base() removes both query and fragment.
+inline jsoncons::uri resource_uri(const jsoncons::uri& uri) {
+    return jsoncons::uri(jsoncons::uri_encoded_part,uri.scheme(),uri.encoded_userinfo(),
+        uri.host(),uri.port(),uri.encoded_path(),uri.encoded_query(),"");
+}
 inline engine::evaluation_options options() {
     engine::evaluation_options result;
     result.default_version(engine::schema_version::draft202012())
@@ -100,7 +106,7 @@ class registration {
         const jsoncons::uri uri(identifier);
         if (!uri.is_absolute() || !uri.fragment().empty())
             throw policy_error("Unsupported schema dialect");
-        const auto key = uri.base().string();
+        const auto key = resource_uri(uri).string();
         if (key == engine::schema_version::draft202012() || checked_dialects_.contains(key)) return;
         if (!active_dialects_.insert(key).second)
             throw policy_error("Cyclic schema dialect declaration");
@@ -114,7 +120,11 @@ class registration {
     void inspect(const nlohmann::json& schema,std::string base) {
         if (!schema.is_object() || !inspected_.insert(&schema).second) return;
         if (schema.contains("$id")) {
-            base = jsoncons::uri(base).resolve(jsoncons::uri(schema.at("$id").get<std::string>())).base().string();
+            base = resource_uri(jsoncons::uri(base).resolve(
+                jsoncons::uri(schema.at("$id").get<std::string>()))).string();
+            // Retrieval aliases share the canonical resource's anchor namespace.
+            for (auto& [alias,entry] : resources_)
+                if (entry.value == &schema) entry.base = base;
             const auto [position,inserted] = resources_.emplace(jsoncons::uri(base),resource{&schema,base});
             if (!inserted && position->second.value != &schema)
                 throw policy_error("Duplicate schema resource identifier");
@@ -160,13 +170,13 @@ class registration {
         return found->second;
     }
     void inspect_reference(const jsoncons::uri& uri) {
-        const auto key = uri.base().string();
+        const auto key = resource_uri(uri).string();
         if (builtin_resources().contains(key)) return;
         const auto& document = load_resource(key);
         const auto fragment = uri.fragment();
         if (fragment.empty()) return;
         if (fragment.front() != '/') {
-            if (!anchors_.contains(jsoncons::uri(key+"#"+fragment)))
+            if (!anchors_.contains(jsoncons::uri(resources_.at(jsoncons::uri(key)).base+"#"+fragment)))
                 throw policy_error("Unregistered schema anchor");
             return;
         }
@@ -190,7 +200,7 @@ public:
         }
     }
     json resolve(const jsoncons::uri& uri) const {
-        const auto key = uri.base().string();
+        const auto key = resource_uri(uri).string();
         if (const auto found = builtin_resources().find(key); found != builtin_resources().end()) return found->second;
         if (const auto found = converted_.find(key); found != converted_.end()) return found->second;
         if (const auto found = resources_.find(jsoncons::uri(key)); found != resources_.end()) return convert(*found->second.value);
