@@ -17,12 +17,12 @@ Plan: [plan.md](plan.md). Checklist: [todo.md](todo.md).
 | T02 | Complete; reviewed | `eb66bb3`; fresh consumer verified |
 | T03 | Complete; reviewed | `b830540`; contract and standalone headers |
 | T04 | Complete; reviewed | `02becce`; umbrella macro integration fix `6c85b53` |
-| T05 | Adapter approved; qualification BLOCKED | `23310aa`; local 295/295; official 1295/1302 on Windows and Linux, zero skips |
+| T05 | Complete; locally qualified and reviewed | `23310aa`, `ff4fb90`, `dd35713`; official1302/1302, zero skips; final Windows95/95 and WSL94/94 unfiltered |
 | T06 | Complete; fix reviewed | `a1e56ff` + `84423ae`; allocation-failure cleanup fixed |
 | T07 | Complete; reviewed | `3b29e12`; WSL GCC15.2 POSIX10/10; 36/36 selected regression |
 | T08 | Complete; reviewed | `94f58ac`; native MSVC9cases/978assertions; 31/31 selected regression |
 | T09 | Complete; reviewed | `8fd8d25`; Windows16/16, Linux14/14 |
-| T10 | Runtime complete; reviewed under T05 exception | `bcfcb0e`, `56ef7ff`, `2138f90`; 18 cases/502 assertions; Windows 81/81, WSL 80/80 excluding the separately failing official gate |
+| T10 | Complete; reviewed | `bcfcb0e`, `56ef7ff`, `2138f90`; full current Windows95/95 and WSL94/94, including schema gate |
 | T11-T21 | Deferred by user | Stop after T10 checkpoint for user review; README last |
 ## Reviews and decisions
 
@@ -92,3 +92,28 @@ Ruling: Exercise application-worker ownership through a minimal typed static res
 - T05 remains BLOCKED: 1295/1302 mandatory cases pass on both native MSVC and WSL; seven genuine failures, zero skips. Source-quality review is approved, qualification is not. T11 must wait.
 - [Checkpoint report](checkpoint-t10.md) is the review entrypoint. ADR status labels now match the implemented runtime and failed schema gate. README remains untouched, changes stay local, `.understand-anything/` is preserved, and Docker was not restarted.
 - All requested work stops here for user review. T11-T21 remain unchecked.
+
+## Resumed: complete and audit T01-T10, 2026-10-26
+
+- User explicitly authorized resolving T05 and repairing/reviewing the complete T01-T10 foundation. The preceding review stop is lifted; T11-T21 and README remain deferred.
+- The current schema gate was rerun before fixes: exactly seven failures, 1302 cases, zero skips, CTest exit8 (`build/execution/T05-resume-red.log`).
+- Ruling: [ADR-004](../docs/decisions/0004-schema-qualification-corrections.md) supersedes the earlier NUL-only boundary to add canonical resource associations and a pinned header-only Unicode regex engine inside normal backend evaluation. Root-cause probes establish both defects; no skip list or weakened claim is allowed. Cost if wrong: additional patch/dependency maintenance and bounded integration rework, caught by the unchanged mandatory gate and focused regressions.
+- Independent whole-foundation review is running against `d919cfe..bbf7ed7`; new fixes receive their own scoped review and final accumulated validation before this checkpoint is declared complete.
+- Independent review completed with three P2 findings: parser numeric-overflow recovery (F1), dirty dependency content qualification (F2) and T09 fixture capture lifetime on assertion unwind (F3). F2 is assigned to the T05 dependency correction; F1/F3 form one scoped runtime/test repair batch.
+- Ruling: Run the T05 dependency repair and the disjoint two-file T09 repair concurrently, but give T09 a direct standalone Catch2 build so it never regenerates CMake while the dependency files change. Shared CMake edits remain exclusive to T05; all Git staging/commits are serialized by the controller. Cost if wrong: confined integration/retest work, caught by final all-target builds and scoped review.
+
+### Continuation 2026-10-27
+
+- The prior agent turns were interrupted by usage limits before reports, review or commits were complete. Working source edits are preserved; HEAD remains `bbf7ed7`. No completion is implied by those edits.
+- Initial T05 focused corrections passed; the first complete adapter run exposed four URN r-/q-component registration failures and one new fragment-resource lifetime fixture failure. The mandatory suite still ran all 1302 cases with zero skips. These regressions must be fixed before qualification.
+- T05 and the T09 runtime/test repair have resumed from existing artifacts. Final native MSVC/WSL all-target builds, unfiltered CTest, actual consumer execution, updated raw-wire probes and scoped review are still pending.
+- T09 F1/F3 repaired in `4286da6`: RED reproduced numeric overflow; standalone Linux GREEN passed 48 focused assertions in2 cases and 136 assertions in15 stdio cases. Scoped review and native Windows aggregate remain pending.
+- Ruling: Extend the T05 adapter repair to preserve query-bearing resource identity and canonical anchor lookup through retrieval aliases, as specified in the ADR-004 qualification amendment. The first full run establishes the URI bug, and the alias lifetime regression establishes the missing canonical lookup. Cost if wrong: bounded adapter/association rework, checked by the unfiltered suite and explicit query/alias/nested-resource regressions.
+- T05 implementation committed `ff4fb90`: standalone19/19; schema6 cases/2372 assertions; unchanged mandatory1302/1302,zero skips; fresh consumer executes successfully. Scoped review is in progress.
+- Initial final native MSVC all-target build and unfiltered CTest pass94/94, including actual consumer runtime and raw-wire numeric-overflow recovery/EOF. Linux run remains in progress. These results do not waive subsequent review findings.
+- Scoped review found a CMake-floor fixture defect: `FetchContent_SetPopulated` is unavailable at the promised3.20 floor. Actual CMake3.20.5 reproduced the wrong-error failure (`build/execution/T05-cmake320-red.log`). A supported local population fixture must replace it and pass minimum-version verification before handoff.
+- T05 scoped review requests exactly two P2 fixes: CMake-floor fixture and query-bearing custom dialect lookup in backend `json_schema_factory.hpp`; F2 provenance is addressed. ADR-004 now explicitly authorizes the seventh backend file with exact migration qualification. Existing passing1302 suite is genuine but does not waive the additional regression.
+- Initial WSL full run passed92/93; only the expanded negative-state provenance test timed out at120.10s. All runtime and mandatory-schema cases passed. The controller initially inferred30s from the older fixture; the actual log and current CTest properties establish120s. Ruling: preserve all provenance assertions, narrow repeated fixture restores to changed header paths to avoid rescanning the whole upstream tree, and measure any necessary bounded budget adjustment; retain runtime/EOF deadlines. Cost if wrong: longer failure detection for a build fixture, not weaker protocol behavior.
+- T05 review fixes committed as `dd35713`: the CMake3.20-compatible populated fixture and query-preserving custom-dialect lookup are implemented. Focused run passed1302/1302 mandatory cases (zero skips;2415 assertions/7 cases), CMake3.20/current parent fixtures pass, and the optimized WSL provenance fixture passed in89.96s within its unchanged120s limit. Scoped rereview approves spec and quality with no open findings (`build/execution/T05-review-fix-review.md`).
+- Final Windows/MSVC unfiltered CTest passed95/95; final Ubuntu WSL/GCC15.2 unfiltered CTest passed94/94. Fresh downstream consumers and raw-wire numeric-overflow/EOF probes passed on both. A CMake3.20.5 fresh consumer also configured, built and ran successfully. Full logs and transcripts are under `build/execution/T01-T10-final-*`.
+- T01-T10 foundation completion: independent baseline review found F1/F2/F3; `4286da6`, `ff4fb90` and `dd35713` address them and the additional schema-review findings. Scoped rereviews approve spec and quality with no open findings. T05's mandatory schema suite runs1302/1302 cases with zero skips. README and T11-T21 remain pending; this is not a full M1 or host-compatibility claim.

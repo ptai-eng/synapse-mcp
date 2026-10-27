@@ -1,18 +1,20 @@
 # ADR-003: A pinned JSON Schema backend with an explicit dependency correction
 
-- Status: Adapter implemented and reviewed; qualification BLOCKED (7/1302 mandatory cases fail)
+- Status: Superseded in part by ADR-004; locally qualified after its corrections
 - Date: 2026-10-25
-- Qualification checkpoint: [T10 review record](../../tasks/checkpoint-t10.md), 2026-10-26
+- Qualification decision: [ADR-004](0004-schema-qualification-corrections.md)
 - Applies to: M1's MCP `2025-11-25` tool-input validation
 - Related: [ADR-001](0001-product-and-protocol.md), [M1 specification](../../specs/001-native-stdio-foundation/spec.md), [constitution](../../.specify/memory/constitution.md)
 
 ## Decision
 
+The detailed original correction steps below record the first implementation. ADR-004 supersedes the original regex-engine choice and NUL-only patch boundary, and records the current dependency, additional corrections and qualification evidence.
+
 Use **jsoncons v1.10.0**, pinned to commit `9e57e421285422d7aeeb5aa7dc839f6a19121ee6`, through an internal validation adapter. Keep `nlohmann::json` as the protocol and application-facing JSON type, including the current vendored 3.11.3 header. Do not replace or edit `include/nlohmann/`.
 
-Apply narrowly scoped, tracked corrections to jsoncons's downloaded build-tree source: make the `pattern` validator's regular-expression search use the full string range, including embedded NUL characters, and preserve the full property-key length in `additionalProperties`, `properties` and `unevaluatedProperties` lookups. Preserve the upstream license and notices. Do not apply a broad regex rewrite, modify tracked vendor headers, or silently patch system-installed dependencies.
+Apply narrowly scoped, tracked corrections to jsoncons's downloaded build-tree source: make the `pattern` validator's regular-expression search use the full string range, including embedded NUL characters, and preserve the full property-key length in `additionalProperties`, `properties` and `unevaluatedProperties` lookups. ADR-004 records the later Unicode and resource-identity amendments. Preserve upstream licenses and notices; do not modify tracked vendor headers or silently patch system-installed dependencies.
 
-The pinned source and correction are **candidates until the qualification gate passes**. Neither upstream's supported-draft documentation nor this ADR establishes that Synapse currently provides JSON Schema 2020-12 validation. Tool migration must wait for the gate.
+The corrected adapter has passed the locally executed mandatory draft2020-12 qualification suite; see ADR-004 and the checkpoint for its exact scope. This does not establish optional-format, complete MCP milestone or host compatibility.
 
 ## Context and alternatives
 

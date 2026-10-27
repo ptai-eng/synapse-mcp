@@ -6,9 +6,9 @@
 
 **Architecture:** Keep the header-only core, borrowed transport and frozen registries. A separate protocol reader admits bounded work to one owned application worker; an interruptible writer handles encoded frames. Validate tool inputs through a pinned, corrected and qualified schema adapter before invoking application code.
 
-**Tech Stack:** C++23, CMake >=3.20, vendored nlohmann/json 3.11.3, jsoncons 1.10.0 with the recorded correction, Catch2 3.4.0; dev-only Node 24.22.1, official MCP client 2.4.0 and Inspector 2.12.0.
+**Tech Stack:** C++23, CMake >=3.20, vendored nlohmann/json 3.11.3, jsoncons 1.10.0 with the recorded corrections, header-only SRELL 2026.07, Catch2 3.4.0; dev-only Node 24.22.1, official MCP client 2.4.0 and Inspector 2.12.0.
 
-**Spec:** [Specification 001](../specs/001-native-stdio-foundation/spec.md). Decisions: [product](../docs/decisions/0001-product-and-protocol.md), [runtime](../docs/decisions/0002-runtime-ownership.md), [schema](../docs/decisions/0003-schema-validation.md). Principles: [constitution](../.specify/memory/constitution.md).
+**Spec:** [Specification 001](../specs/001-native-stdio-foundation/spec.md). Decisions: [product](../docs/decisions/0001-product-and-protocol.md), [runtime](../docs/decisions/0002-runtime-ownership.md), [schema](../docs/decisions/0003-schema-validation.md), [schema qualification amendments](../docs/decisions/0004-schema-qualification-corrections.md). Principles: [constitution](../.specify/memory/constitution.md).
 
 ## Status and execution method
 

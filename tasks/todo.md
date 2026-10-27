@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: Paused for the user's review at the [T10 checkpoint](checkpoint-t10.md). Runtime through T10 is implemented and reviewed; T05 qualification remains blocked. See [execution.md](execution.md) for evidence and decisions. Read [plan.md](plan.md), its interfaces and both implementation ADRs first. Do not mark a task complete from document review alone.
+Status: T01-T10 are complete and reviewed; see [checkpoint-t10.md](checkpoint-t10.md) and [execution.md](execution.md) for local verification and decisions. T11-T21 remain pending. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -51,10 +51,10 @@ Depends: T01, T03. Files (4): `include/synapse/detail/schema_validator.hpp`, `te
 - [x] RED: `M1.schema.registration_and_validation` covers invalid metaschema, absent/unsupported dialect, offline refs/dynamic refs, required unknown vocabularies, unevaluated items/properties, prefix items, branches, NUL cases and unchanged input. Non-finite/binary/discarded SDK JSON never changes silently during conversion.
 - [x] Run schema tests and the pinned official draft2020-12 suite; record failures rather than creating a skip list.
 - [x] Implement ADR-003's exact `compile_schema`/`validate` interface, offline catalog and sanitized failure categories. Format remains annotation by default; no defaults or network/file retrieval.
-- [ ] GREEN: every non-optional selected suite case on Linux and Windows, plus adapter regressions. A mandatory failure blocks T11 and requires an explicit recorded correction/decision.
-- [ ] Review and commit `feat: add qualified schema validation`.
+- [x] GREEN: every non-optional selected suite case on Linux and Windows, plus adapter regressions. A mandatory failure blocks T11 and requires an explicit recorded correction/decision.
+- [x] Review and commit the qualified schema validation implementation.
 
-Checkpoint: adapter source approved and committed as `23310aa`; local regressions pass, but qualification remains 1295/1302 on Windows and Linux. The final two items remain open: source approval does not qualify the backend. T11 is blocked.
+Status: adapter and correction work is committed as `23310aa`, `ff4fb90` and `dd35713`; the unchanged mandatory suite passes on Windows and Linux with zero skips. Scoped reviews approve the fixes; both final unfiltered aggregates pass.
 
 ## T06: Own and cancel application work
 
@@ -221,7 +221,7 @@ Depends: T20 and all checkpoint evidence. Files (5): `README.md`, `docs/migratio
 ## Checkpoint record
 
 - [x] Dependency/consumer: T01-T03 evidence reviewed.
-- [ ] Boundary/schema/executor: T04-T06 evidence reviewed.
+- [x] Boundary/schema/executor: T04-T06 evidence reviewed.
 - [x] I/O: T07-T09 evidence reviewed on both supported platforms.
 - [ ] Methods: T10-T14 evidence reviewed.
 - [ ] Reference/interop: T15-T18 evidence reviewed.
