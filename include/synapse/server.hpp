@@ -64,6 +64,21 @@ public:
         resources_.emplace(std::move(key), registered_resource{std::move(descriptor), std::move(handler)});
         return {};
     }
+    std::expected<void, sdk_error> register_prompt(prompt descriptor, prompt_handler handler) {
+        std::lock_guard lock(mutex_);
+        if (state_ != lifecycle::configuring) return local_error("Registration is frozen");
+        if (!handler || descriptor.name.empty() || !safe_text(descriptor.name) ||
+            !safe_text(descriptor.description) || prompts_.contains(descriptor.name))
+            return local_error("Invalid prompt descriptor");
+        std::map<std::string, bool> names;
+        for (const auto& argument : descriptor.arguments)
+            if (argument.name.empty() || !safe_text(argument.name) || !safe_text(argument.description) ||
+                !names.emplace(argument.name, argument.required).second)
+                return local_error("Invalid prompt descriptor");
+        auto key = descriptor.name;
+        prompts_.emplace(std::move(key), registered_prompt{std::move(descriptor), std::move(handler)});
+        return {};
+    }
     std::expected<void, sdk_error> start() {
         {
             std::lock_guard lock(mutex_);
@@ -144,6 +159,7 @@ private:
     enum class connection { await_initialize, await_initialized, ready, closing };
     struct registered_tool { tool descriptor; tool_handler handler; detail::compiled_schema validator; };
     struct registered_resource { resource descriptor; resource_handler handler; };
+    struct registered_prompt { prompt descriptor; prompt_handler handler; };
     struct operation { json_rpc_id id; bool cancelled = false; };
     struct completion {
         server* owner; std::shared_ptr<operation> op;
@@ -177,6 +193,7 @@ private:
     lifecycle state_ = lifecycle::configuring;
     connection protocol_ = connection::await_initialize;
     std::map<std::string, registered_resource> resources_;
+    std::map<std::string, registered_prompt> prompts_;
     std::map<std::string, registered_tool> tools_;
     std::vector<std::shared_ptr<operation>> inflight_;
     std::unique_ptr<detail::owned_executor> executor_;
@@ -281,6 +298,7 @@ private:
             !p["clientInfo"].contains("version") || !p["clientInfo"]["version"].is_string())
             return failure(req.id, error_code::invalid_params, "Invalid initialize parameters");
         nlohmann::json capabilities = nlohmann::json::object();
+        if (!prompts_.empty()) capabilities["prompts"] = nlohmann::json::object();
         if (!resources_.empty()) capabilities["resources"] = nlohmann::json::object();
         if (!tools_.empty()) capabilities["tools"] = nlohmann::json::object();
         response reply; reply.id = req.id;
@@ -345,6 +363,47 @@ private:
             if (!filtered) return tool_failure(req.id);
             reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", std::move(*filtered)}}})}};
             if (!result) (*reply.result)["isError"] = true;
+        } else if (req.method == "prompts/list") {
+            if (req.params && (!req.params->is_object() || (req.params->contains("cursor") && !(*req.params)["cursor"].is_string())))
+                return failure(req.id, error_code::invalid_params, "Invalid prompt parameters");
+            auto list = nlohmann::json::array();
+            for (const auto& [name, item] : prompts_) list.push_back(item.descriptor);
+            reply.result = nlohmann::json{{"prompts", std::move(list)}};
+        } else if (req.method == "prompts/get") {
+            if (!req.params || !req.params->is_object() || !req.params->contains("name") || !(*req.params)["name"].is_string() ||
+                (req.params->contains("arguments") && !(*req.params)["arguments"].is_object()))
+                return failure(req.id, error_code::invalid_params, "Invalid prompt parameters");
+            const auto found = prompts_.find((*req.params)["name"].get_ref<const std::string&>());
+            if (found == prompts_.end()) return failure(req.id, error_code::invalid_params, "Unknown prompt");
+            const auto arguments = req.params->value("arguments", nlohmann::json::object());
+            std::map<std::string, std::string> values;
+            for (auto it = arguments.begin(); it != arguments.end(); ++it) {
+                const auto& descriptors = found->second.descriptor.arguments;
+                if (!it.value().is_string() || std::none_of(descriptors.begin(), descriptors.end(),
+                    [&](const auto& argument) { return argument.name == it.key(); }))
+                    return failure(req.id, error_code::invalid_params, "Invalid prompt arguments");
+                values.emplace(it.key(), it.value().get<std::string>());
+            }
+            for (const auto& argument : found->second.descriptor.arguments)
+                if (argument.required && !values.contains(argument.name))
+                    return failure(req.id, error_code::invalid_params, "Invalid prompt arguments");
+            auto result = found->second.handler(values, context);
+            if (!result) return failure(req.id, error_code::internal_error, "Internal error");
+            auto messages = nlohmann::json::array();
+            for (const auto& message : result->messages) {
+                if (message.role != prompt_role::user && message.role != prompt_role::assistant)
+                    return failure(req.id, error_code::internal_error, "Internal error");
+                auto text = policy_.filter(req.method, message.text, context);
+                if (!text) return failure(req.id, error_code::internal_error, "Internal error");
+                messages.push_back({{"role", message.role == prompt_role::user ? "user" : "assistant"},
+                    {"content", {{"type", "text"}, {"text", std::move(*text)}}}});
+            }
+            reply.result = nlohmann::json{{"messages", std::move(messages)}};
+            if (result->description) {
+                auto description = policy_.filter(req.method, *result->description, context);
+                if (!description) return failure(req.id, error_code::internal_error, "Internal error");
+                (*reply.result)["description"] = std::move(*description);
+            }
         } else if (req.method == "resources/templates/list") {
             if (req.params && (!req.params->is_object() || (req.params->contains("cursor") && !(*req.params)["cursor"].is_string())))
                 return failure(req.id, error_code::invalid_params, "Invalid resource parameters");

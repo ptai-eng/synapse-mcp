@@ -87,3 +87,7 @@ catch_discover_tests(synapse_policy_tests TEST_PREFIX "synapse." PROPERTIES TIME
 add_executable(synapse_resource_tests resources.cpp)
 target_link_libraries(synapse_resource_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
 catch_discover_tests(synapse_resource_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
+
+add_executable(synapse_prompt_tests prompts.cpp)
+target_link_libraries(synapse_prompt_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
+catch_discover_tests(synapse_prompt_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
