@@ -114,6 +114,12 @@ public:
         }
     }
 
+    // Largest JSON frame that can be admitted, excluding the newline delimiter.
+    std::size_t max_encoded_frame_bytes() const noexcept {
+        if (!options_.max_outbound_bytes) return 0;
+        return (std::min)(options_.max_frame_bytes, options_.max_outbound_bytes - 1);
+    }
+
     void stop() noexcept { begin_close(close_reason::requested_stop); }
 
     std::expected<void, sdk_error> wait() {

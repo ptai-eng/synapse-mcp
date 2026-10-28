@@ -2,6 +2,7 @@
 
 #include <synapse/detail/message_decoder.hpp>
 #include <synapse/detail/owned_executor.hpp>
+#include <synapse/detail/server_policy.hpp>
 #include <synapse/detail/schema_validator.hpp>
 #include <synapse/server_options.hpp>
 #include <synapse/transport.hpp>
@@ -25,7 +26,12 @@ public:
           transport_send_([&transport](const auto& wire) { return transport.send(wire); }),
           transport_stop_([&transport] { transport.stop(); }),
           transport_wait_([&transport] { return transport.wait(); }),
-          transport_wait_for_([&transport](auto timeout) { return transport.wait_for(timeout); }) {}
+          transport_wait_for_([&transport](auto timeout) { return transport.wait_for(timeout); }),
+          transport_frame_limit_([&transport] {
+              if constexpr (requires { transport.max_encoded_frame_bytes(); })
+                  return static_cast<std::size_t>(transport.max_encoded_frame_bytes());
+              else return stdio_options{}.max_frame_bytes;
+          }) {}
     server(const server&) = delete;
     server& operator=(const server&) = delete;
     server(server&&) = delete;
@@ -160,11 +166,13 @@ private:
     inline static thread_local callback_scope* active_ = nullptr;
     server_info info_;
     server_options options_;
+    detail::server_policy policy_{options_};
     std::function<std::expected<void, sdk_error>(stdio_transport::message_callback, stdio_transport::close_callback)> transport_start_;
     std::function<std::expected<void, sdk_error>(const nlohmann::json&)> transport_send_;
     std::function<void()> transport_stop_;
     std::function<std::expected<void, sdk_error>()> transport_wait_;
     std::function<std::expected<bool, sdk_error>(std::chrono::milliseconds)> transport_wait_for_;
+    std::function<std::size_t()> transport_frame_limit_;
     std::mutex mutex_;
     lifecycle state_ = lifecycle::configuring;
     connection protocol_ = connection::await_initialize;
@@ -234,6 +242,15 @@ private:
             response reply;
             try { reply = application(req, context); }
             catch (...) { reply = failure(req.id, error_code::internal_error, "Internal error"); }
+            const auto frame_limit = transport_frame_limit_();
+            if (!detail::server_policy::frame_fits(nlohmann::json(reply), frame_limit)) {
+                if (req.method == "tools/call" && reply.result) reply = tool_failure(req.id);
+                else reply = failure(req.id, error_code::internal_error, "Internal error");
+                // An ID may make even a sanitized fallback exceed the limit.
+                if (!detail::server_policy::frame_fits(nlohmann::json(reply), frame_limit)) {
+                    stop(); return;
+                }
+            }
             bool ok = true;
             {
                 // Cancellation and writer admission serialize on this lock.
@@ -302,18 +319,31 @@ private:
                 return failure(req.id, error_code::invalid_params, "Invalid tool parameters");
             const auto found = tools_.find((*req.params)["name"].get_ref<const std::string&>());
             if (found == tools_.end()) return failure(req.id, error_code::invalid_params, "Unknown tool");
+            if (!policy_.allow(found->first, context)) {
+                auto denied = failure(req.id, -32050, "Access denied");
+                denied.err->data = nlohmann::json{{"reason", "access_denied"}};
+                return denied;
+            }
+            if (!policy_.consume()) {
+                auto limited = failure(req.id, -32051, "Rate limited");
+                limited.err->data = nlohmann::json{{"reason", "rate_limited"}};
+                return limited;
+            }
             auto arguments = req.params->value("arguments", nlohmann::json::object());
             auto valid = found->second.validator.validate(arguments);
             if (!valid) {
                 if (valid.error().kind != detail::validation_failure_kind::instance_mismatch)
                     return failure(req.id, error_code::internal_error, "Internal error");
-                reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", "Tool arguments do not match schema"}}})}, {"isError", true}};
+                auto text = policy_.filter(req.method, "Tool arguments do not match schema", context);
+                if (!text) return tool_failure(req.id);
+                reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", std::move(*text)}}})}, {"isError", true}};
                 return reply;
             }
             auto result = found->second.handler(arguments, context);
             std::string text = result ? std::move(result->text) : result.error().public_message;
-            if (!safe_text(text)) return failure(req.id, error_code::internal_error, "Internal error");
-            reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", std::move(text)}}})}};
+            auto filtered = policy_.filter(req.method, text, context);
+            if (!filtered) return tool_failure(req.id);
+            reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", std::move(*filtered)}}})}};
             if (!result) (*reply.result)["isError"] = true;
         } else if (req.method == "resources/list") {
             if (req.params && (!req.params->is_object() || (req.params->contains("cursor") && !(*req.params)["cursor"].is_string())))
@@ -329,16 +359,18 @@ private:
             auto result = found->second.handler(context);
             if (!result) return failure(req.id, error_code::internal_error, "Internal error");
             auto text = std::move(result->text);
-            if (!safe_text(text)) return failure(req.id, error_code::internal_error, "Internal error");
-            if (options_.filter_output) {
-                auto filtered = options_.filter_output(req.method, text, context);
-                if (!filtered || !safe_text(*filtered)) return failure(req.id, error_code::internal_error, "Internal error");
-                text = std::move(*filtered);
-            }
+            auto filtered = policy_.filter(req.method, text, context);
+            if (!filtered) return failure(req.id, error_code::internal_error, "Internal error");
+            text = std::move(*filtered);
             nlohmann::json content = {{"uri", found->second.descriptor.uri}, {"text", std::move(text)}};
             if (found->second.descriptor.mimeType) content["mimeType"] = *found->second.descriptor.mimeType;
             reply.result = nlohmann::json{{"contents", nlohmann::json::array({std::move(content)})}};
         } else return failure(req.id, error_code::method_not_found, "Method not found");
+        return reply;
+    }
+    static response tool_failure(json_rpc_id id) {
+        response reply; reply.id = std::move(id);
+        reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", "Tool output rejected"}}})}, {"isError", true}};
         return reply;
     }
 };
