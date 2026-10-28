@@ -30,7 +30,8 @@ TEST_CASE("M1.tools.validation_and_results", "[M1][tools]") {
  t.message(call(1,"tools/list")); auto list=t.next(); REQUIRE(list["result"]["tools"].size()==1); CHECK(list["result"]["tools"][0]["name"]=="echo");
  t.message(call(2,"tools/call",{{"name","echo"}})); CHECK(t.next()["result"]["content"][0]["text"]=="empty"); CHECK(worker!=std::this_thread::get_id());
  t.message(call(3,"tools/call",{{"name","echo"},{"arguments",{{"value","hello"}}}})); CHECK(t.next()["result"]["content"][0]["text"]=="hello");
- for (auto p : {json{{"name","missing"}}, json{{"name","echo"},{"arguments",42}}, json{{"name",42}}}) { t.message(call(4,"tools/call",p)); CHECK(t.next()["error"]["code"]==-32602); }
+ int bad_id=40;
+ for (auto p : {json{{"name","missing"}}, json{{"name","echo"},{"arguments",42}}, json{{"name",42}}}) { t.message(call(bad_id++,"tools/call",p)); CHECK(t.next()["error"]["code"]==-32602); }
  CHECK(count==2);
  t.message(call(5,"tools/call",{{"name","echo"},{"arguments",{{"value",123},{"secret","SECRET_INSTANCE"}}}})); auto mismatch=t.next(); CHECK(mismatch["result"]["isError"]==true); CHECK(mismatch.dump().find("SECRET_INSTANCE")==std::string::npos); CHECK(count==2);
  t.message(call(6,"tools/call",{{"name","echo"},{"arguments",{{"value","domain"}}}})); auto domain=t.next(); CHECK(domain["result"]["isError"]==true); CHECK(domain["result"]["content"][0]["text"]=="public error");
