@@ -345,6 +345,10 @@ private:
             if (!filtered) return tool_failure(req.id);
             reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", std::move(*filtered)}}})}};
             if (!result) (*reply.result)["isError"] = true;
+        } else if (req.method == "resources/templates/list") {
+            if (req.params && (!req.params->is_object() || (req.params->contains("cursor") && !(*req.params)["cursor"].is_string())))
+                return failure(req.id, error_code::invalid_params, "Invalid resource parameters");
+            reply.result = nlohmann::json{{"resourceTemplates", nlohmann::json::array()}};
         } else if (req.method == "resources/list") {
             if (req.params && (!req.params->is_object() || (req.params->contains("cursor") && !(*req.params)["cursor"].is_string())))
                 return failure(req.id, error_code::invalid_params, "Invalid resource parameters");
