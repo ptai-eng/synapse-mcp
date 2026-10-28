@@ -2,6 +2,7 @@
 
 #include <synapse/detail/message_decoder.hpp>
 #include <synapse/detail/owned_executor.hpp>
+#include <synapse/detail/schema_validator.hpp>
 #include <synapse/server_options.hpp>
 #include <synapse/transport.hpp>
 #include <algorithm>
@@ -31,6 +32,21 @@ public:
     server& operator=(server&&) = delete;
     ~server() { stop(); (void)wait(); }
 
+    std::expected<void, sdk_error> register_tool(tool descriptor, tool_handler handler) {
+        std::lock_guard lock(mutex_);
+        if (state_ != lifecycle::configuring) return local_error("Registration is frozen");
+        if (!handler || descriptor.name.empty() || !safe_text(descriptor.name) ||
+            !safe_text(descriptor.description) || tools_.contains(descriptor.name) ||
+            !descriptor.inputSchema.is_object() || !descriptor.inputSchema.contains("type") ||
+            descriptor.inputSchema["type"] != "object" ||
+            (descriptor.inputSchema.contains("properties") && !descriptor.inputSchema["properties"].is_object()))
+            return std::unexpected(sdk_error{sdk_errc::invalid_schema, "Invalid tool descriptor"});
+        auto validator = detail::compile_schema(descriptor.inputSchema, {});
+        if (!validator) return std::unexpected(validator.error());
+        auto key = descriptor.name;
+        tools_.emplace(std::move(key), registered_tool{std::move(descriptor), std::move(handler), std::move(*validator)});
+        return {};
+    }
     std::expected<void, sdk_error> register_resource(resource descriptor, resource_handler handler) {
         std::lock_guard lock(mutex_);
         if (state_ != lifecycle::configuring) return local_error("Registration is frozen");
@@ -120,6 +136,7 @@ public:
 private:
     enum class lifecycle { configuring, starting, running, stopping, stopped };
     enum class connection { await_initialize, await_initialized, ready, closing };
+    struct registered_tool { tool descriptor; tool_handler handler; detail::compiled_schema validator; };
     struct registered_resource { resource descriptor; resource_handler handler; };
     struct operation { json_rpc_id id; bool cancelled = false; };
     struct completion {
@@ -152,6 +169,7 @@ private:
     lifecycle state_ = lifecycle::configuring;
     connection protocol_ = connection::await_initialize;
     std::map<std::string, registered_resource> resources_;
+    std::map<std::string, registered_tool> tools_;
     std::vector<std::shared_ptr<operation>> inflight_;
     std::unique_ptr<detail::owned_executor> executor_;
 
@@ -247,6 +265,7 @@ private:
             return failure(req.id, error_code::invalid_params, "Invalid initialize parameters");
         nlohmann::json capabilities = nlohmann::json::object();
         if (!resources_.empty()) capabilities["resources"] = nlohmann::json::object();
+        if (!tools_.empty()) capabilities["tools"] = nlohmann::json::object();
         response reply; reply.id = req.id;
         reply.result = nlohmann::json{{"protocolVersion", "2025-11-25"}, {"capabilities", capabilities},
             {"serverInfo", {{"name", info_.name}, {"version", info_.version}}}};
@@ -271,7 +290,32 @@ private:
     }
     response application(const request& req, const request_context& context) {
         response reply; reply.id = req.id;
-        if (req.method == "resources/list") {
+        if (req.method == "tools/list") {
+            if (req.params && (!req.params->is_object() || (req.params->contains("cursor") && !(*req.params)["cursor"].is_string())))
+                return failure(req.id, error_code::invalid_params, "Invalid tool parameters");
+            auto list = nlohmann::json::array();
+            for (const auto& [name, item] : tools_) list.push_back(item.descriptor);
+            reply.result = nlohmann::json{{"tools", std::move(list)}};
+        } else if (req.method == "tools/call") {
+            if (!req.params || !req.params->is_object() || !req.params->contains("name") || !(*req.params)["name"].is_string() ||
+                (req.params->contains("arguments") && !(*req.params)["arguments"].is_object()))
+                return failure(req.id, error_code::invalid_params, "Invalid tool parameters");
+            const auto found = tools_.find((*req.params)["name"].get_ref<const std::string&>());
+            if (found == tools_.end()) return failure(req.id, error_code::invalid_params, "Unknown tool");
+            auto arguments = req.params->value("arguments", nlohmann::json::object());
+            auto valid = found->second.validator.validate(arguments);
+            if (!valid) {
+                if (valid.error().kind != detail::validation_failure_kind::instance_mismatch)
+                    return failure(req.id, error_code::internal_error, "Internal error");
+                reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", "Tool arguments do not match schema"}}})}, {"isError", true}};
+                return reply;
+            }
+            auto result = found->second.handler(arguments, context);
+            std::string text = result ? std::move(result->text) : result.error().public_message;
+            if (!safe_text(text)) return failure(req.id, error_code::internal_error, "Internal error");
+            reply.result = nlohmann::json{{"content", nlohmann::json::array({{{"type", "text"}, {"text", std::move(text)}}})}};
+            if (!result) (*reply.result)["isError"] = true;
+        } else if (req.method == "resources/list") {
             if (req.params && (!req.params->is_object() || (req.params->contains("cursor") && !(*req.params)["cursor"].is_string())))
                 return failure(req.id, error_code::invalid_params, "Invalid resource parameters");
             auto list = nlohmann::json::array();
