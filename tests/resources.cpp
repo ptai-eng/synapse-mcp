@@ -56,3 +56,39 @@ TEST_CASE("M1.resources.text_snapshot", "[M1][resources]") {
  for(mode=1;mode<=4;++mode) { auto err=t.request(10+mode,"resources/read",{{"uri","app://status"}}); CHECK(err["error"]["code"]==-32603); CHECK(err.dump().find("private")==std::string::npos); CHECK(err.dump().find("bad")==std::string::npos); }
  s.stop(); REQUIRE(s.wait());
 }
+
+TEST_CASE("M1.resources.uri_syntax", "[M1][resources]") {
+ transport t; std::atomic<int> calls{0}; synapse::server s(t);
+ auto handler=[&](const synapse::request_context&) -> std::expected<synapse::resource_result,synapse::handler_error> {
+  ++calls; return synapse::resource_result{"ok"};
+ };
+ const std::vector<std::string> invalid={"relative/path",":missing-scheme","1app://status","app://bad path",
+  "app://bad\npath","app://bad%ZZ","app://bad%2","app://bad\\path","app://[bad]","app://host:abc/path",
+  "app://host/path#one#two","app://host/\xc3\xa9","app://user@@host/path","app://[::1]suffix/path",
+  "app://[1:2:3:4:5:6:7]/path","app://[1:2:3:4:5:6:7:8:9]/path","app://[1::2::3]/path",
+  "app://[:::]/path","app://[::ffff:192.0.2.999]/path","app://[::ffff:192.00.2.1]/path",
+  "app://[v1.]/path","app://[vZ.address]/path","app://[v1.a%20]/path","app:path?x=%GG",
+  "app:path#%","app://user%GG@host/","app://host/{}"};
+ for(const auto& uri:invalid) {
+  INFO(uri); CHECK_FALSE(s.register_resource({uri,"Invalid","",std::nullopt},handler));
+ }
+ const std::vector<std::string> valid={"app://status","custom+v1:item%20name?x=%2F#part",
+  "urn:example:status","file:///tmp/a%20b","app://user:pass@[::1]:80/a?b/c?d#e/f?g",
+  "app://[v1.fe80]/status","app:/status","app:","app://host:/path","app://[::]/",
+  "app://[1:2:3:4:5:6:7:8]/","app://[::ffff:192.0.2.1]/","app://[1:2:3:4:5:6:192.0.2.1]/",
+  "app://user%40name@host/%00?x=%FF#%23","custom:opaque:identity","app:///empty-authority"};
+ for(const auto& uri:valid) { INFO(uri); REQUIRE(s.register_resource({uri,"Valid","",std::nullopt},handler)); }
+ REQUIRE(s.start()); t.ready(); int id=1;
+ for(const auto& uri:invalid) {
+  INFO(uri); const auto reply=t.request(id++,"resources/read",{{"uri",uri}});
+  REQUIRE(reply.contains("error")); CHECK(reply["error"]["code"]==-32602);
+ }
+ CHECK(calls==0);
+ for(const auto& uri:valid) {
+  INFO(uri); const auto reply=t.request(id++,"resources/read",{{"uri",uri}});
+  REQUIRE(reply.contains("result")); CHECK(reply["result"]["contents"][0]["uri"]==uri);
+ }
+ CHECK(calls==valid.size());
+ CHECK(t.request(id++,"resources/read",{{"uri","custom:unknown%20item"}})["error"]["code"]==-32002);
+ s.stop(); REQUIRE(s.wait());
+}

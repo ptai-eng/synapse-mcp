@@ -194,7 +194,7 @@ TEST_CASE("M1.lifecycle.typed_ids_and_sanitized_results", "[M1][lifecycle]") {
     const auto error = t.next();
     CHECK(error.at("error").at("code") == -32603);
     CHECK(error.dump().find("secret") == std::string::npos);
-    t.message(call(10, "resources/read", {{"uri", "missing"}}));
+    t.message(call(10, "resources/read", {{"uri", "app://missing"}}));
     CHECK(t.next().at("error").at("code") == -32002);
     t.message(call(11, "resources/list"));
     CHECK(t.next().at("result").at("resources").size() == 1);

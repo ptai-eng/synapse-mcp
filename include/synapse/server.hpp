@@ -56,8 +56,8 @@ public:
     std::expected<void, sdk_error> register_resource(resource descriptor, resource_handler handler) {
         std::lock_guard lock(mutex_);
         if (state_ != lifecycle::configuring) return local_error("Registration is frozen");
-        if (!handler || descriptor.uri.empty() || descriptor.name.empty() ||
-            !safe_text(descriptor.uri) || !safe_text(descriptor.name) || !safe_text(descriptor.description) ||
+        if (!handler || !valid_resource_uri(descriptor.uri) || descriptor.name.empty() ||
+            !safe_text(descriptor.name) || !safe_text(descriptor.description) ||
             (descriptor.mimeType && (descriptor.mimeType->empty() || !safe_text(*descriptor.mimeType))) ||
             resources_.contains(descriptor.uri)) return local_error("Invalid resource descriptor");
         auto key = descriptor.uri;
@@ -205,6 +205,108 @@ private:
         for (unsigned char ch : text) if ((ch < 32 && ch != '\t' && ch != '\n' && ch != '\r') || ch == 127) return false;
         try { (void)nlohmann::json(text).dump(); return true; } catch (...) { return false; }
     }
+    static bool valid_resource_uri(std::string_view uri) {
+        // RFC 3986 absolute URI syntax, including custom schemes. Validate
+        // encoded octets without decoding, normalizing or resolving identity.
+        const auto alpha = [](char ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'); };
+        const auto digit = [](char ch) { return ch >= '0' && ch <= '9'; };
+        const auto hex = [&](char ch) { return digit(ch) || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'); };
+        const auto unreserved = [&](char ch) { return alpha(ch) || digit(ch) || std::string_view("-._~").find(ch) != std::string_view::npos; };
+        const auto component = [&](std::string_view text, std::string_view extra) {
+            for (std::size_t i = 0; i < text.size(); ++i) {
+                const auto ch = text[i];
+                if (ch == '%') {
+                    if (i + 2 >= text.size() || !hex(text[i + 1]) || !hex(text[i + 2])) return false;
+                    i += 2;
+                } else if (!unreserved(ch) && std::string_view("!$&'()*+,;=").find(ch) == std::string_view::npos &&
+                           extra.find(ch) == std::string_view::npos) return false;
+            }
+            return true;
+        };
+        const auto colon = uri.find(':');
+        if (colon == std::string_view::npos || colon == 0 || !alpha(uri.front())) return false;
+        for (const auto ch : uri.substr(1, colon - 1))
+            if (!alpha(ch) && !digit(ch) && ch != '+' && ch != '-' && ch != '.') return false;
+        auto rest = uri.substr(colon + 1);
+        if (const auto hash = rest.find('#'); hash != std::string_view::npos) {
+            if (!component(rest.substr(hash + 1), ":@/?")) return false;
+            rest = rest.substr(0, hash);
+        }
+        if (const auto query = rest.find('?'); query != std::string_view::npos) {
+            if (!component(rest.substr(query + 1), ":@/?")) return false;
+            rest = rest.substr(0, query);
+        }
+        if (rest.starts_with("//")) {
+            rest.remove_prefix(2);
+            const auto slash = rest.find('/');
+            auto authority = rest.substr(0, slash);
+            rest = slash == std::string_view::npos ? std::string_view{} : rest.substr(slash);
+            if (const auto at = authority.find('@'); at != std::string_view::npos) {
+                if (!component(authority.substr(0, at), ":")) return false;
+                authority.remove_prefix(at + 1);
+            }
+            std::string_view port;
+            if (authority.starts_with('[')) {
+                const auto end = authority.find(']');
+                if (end == std::string_view::npos) return false;
+                const auto address = authority.substr(1, end - 1);
+                if (address.starts_with('v') || address.starts_with('V')) {
+                    const auto dot = address.find('.');
+                    if (dot == std::string_view::npos || dot < 2 || dot + 1 == address.size()) return false;
+                    for (const auto ch : address.substr(1, dot - 1)) if (!hex(ch)) return false;
+                    // IPvFuture permits unreserved, sub-delims and colon, but no pct-encoding.
+                    if (address.substr(dot + 1).find('%') != std::string_view::npos ||
+                        !component(address.substr(dot + 1), ":")) return false;
+                } else {
+                    const auto compression = address.find("::");
+                    if (compression != std::string_view::npos && address.find("::", compression + 2) != std::string_view::npos) return false;
+                    int groups = 0;
+                    const auto count_groups = [&](std::string_view part, bool tail) {
+                        while (!part.empty()) {
+                            const auto separator = part.find(':');
+                            const auto group = part.substr(0, separator);
+                            if (group.empty()) return false;
+                            if (group.find('.') != std::string_view::npos) {
+                                if (!tail || separator != std::string_view::npos) return false;
+                                auto ipv4 = group;
+                                for (int i = 0; i < 4; ++i) {
+                                    const auto dot = ipv4.find('.');
+                                    const auto octet = ipv4.substr(0, dot);
+                                    if (octet.empty() || octet.size() > 3 || (octet.size() > 1 && octet.front() == '0')) return false;
+                                    int value = 0;
+                                    for (const auto ch : octet) { if (!digit(ch)) return false; value = value * 10 + ch - '0'; }
+                                    if (value > 255 || (i < 3) != (dot != std::string_view::npos)) return false;
+                                    if (dot != std::string_view::npos) ipv4.remove_prefix(dot + 1);
+                                }
+                                groups += 2;
+                            } else {
+                                if (group.size() > 4) return false;
+                                for (const auto ch : group) if (!hex(ch)) return false;
+                                ++groups;
+                            }
+                            if (separator == std::string_view::npos) break;
+                            part.remove_prefix(separator + 1);
+                            if (part.empty()) return false;
+                        }
+                        return true;
+                    };
+                    if (compression == std::string_view::npos) {
+                        if (!count_groups(address, true) || groups != 8) return false;
+                    } else if (!count_groups(address.substr(0, compression), false) ||
+                               !count_groups(address.substr(compression + 2), true) || groups >= 8) return false;
+                }
+                const auto suffix = authority.substr(end + 1);
+                if (!suffix.empty() && suffix.front() != ':') return false;
+                if (!suffix.empty()) port = suffix.substr(1);
+            } else {
+                const auto separator = authority.find(':');
+                if (!component(authority.substr(0, separator), "")) return false;
+                if (separator != std::string_view::npos) port = authority.substr(separator + 1);
+            }
+            for (const auto ch : port) if (!digit(ch)) return false;
+        }
+        return component(rest, ":@/");
+    }
     static response failure(json_rpc_id id, int code, const char* message) {
         response reply; reply.id = std::move(id); reply.err = error{code, message}; return reply;
     }
@@ -214,7 +316,23 @@ private:
     void complete(const std::shared_ptr<operation>& op) noexcept {
         std::lock_guard lock(mutex_); std::erase(inflight_, op);
     }
-    bool emit(const response& reply) { return transport_send_(nlohmann::json(reply)).has_value(); }
+    // Every response, including reader-side control/admission errors, passes
+    // the same final encoded-frame check while the server mutex is held.
+    bool emit(response reply, std::string_view method = {}) {
+        const auto limit = transport_frame_limit_();
+        auto wire = nlohmann::json(reply);
+        bool failed_initialization = false;
+        if (!detail::server_policy::frame_fits(wire, limit)) {
+            failed_initialization = method == "initialize" && reply.result.has_value();
+            if (method == "tools/call" && reply.result) reply = tool_failure(reply.id);
+            else reply = failure(reply.id, error_code::internal_error, "Internal error");
+            wire = nlohmann::json(reply);
+            if (!detail::server_policy::frame_fits(wire, limit)) return false;
+        }
+        // A sanitized initialization error cannot establish a session. Send
+        // the bounded error, then let receive stop outside the server mutex.
+        return transport_send_(wire).has_value() && !failed_initialization;
+    }
     bool serving() const noexcept { return state_ == lifecycle::starting || state_ == lifecycle::running; }
 
     void receive(const nlohmann::json& wire) {
@@ -241,7 +359,7 @@ private:
                 response reply; reply.id = req->id;
                 if (req->method == "ping") reply.result = nlohmann::json::object();
                 else reply = initialize(*req);
-                close = !emit(reply);
+                close = !emit(reply, req->method);
             } else if (protocol_ != connection::ready) {
                 close = !emit(failure(req->id, error_code::invalid_request, "Server is not initialized"));
             } else {
@@ -259,20 +377,11 @@ private:
             response reply;
             try { reply = application(req, context); }
             catch (...) { reply = failure(req.id, error_code::internal_error, "Internal error"); }
-            const auto frame_limit = transport_frame_limit_();
-            if (!detail::server_policy::frame_fits(nlohmann::json(reply), frame_limit)) {
-                if (req.method == "tools/call" && reply.result) reply = tool_failure(req.id);
-                else reply = failure(req.id, error_code::internal_error, "Internal error");
-                // An ID may make even a sanitized fallback exceed the limit.
-                if (!detail::server_policy::frame_fits(nlohmann::json(reply), frame_limit)) {
-                    stop(); return;
-                }
-            }
             bool ok = true;
             {
                 // Cancellation and writer admission serialize on this lock.
                 std::lock_guard lock(mutex_);
-                if (!op->cancelled && serving()) ok = emit(reply);
+                if (!op->cancelled && serving()) ok = emit(std::move(reply), req.method);
             }
             if (!ok) stop();
         });
@@ -415,7 +524,8 @@ private:
             for (const auto& [uri, item] : resources_) list.push_back(item.descriptor);
             reply.result = nlohmann::json{{"resources", std::move(list)}};
         } else if (req.method == "resources/read") {
-            if (!req.params || !req.params->is_object() || !req.params->contains("uri") || !(*req.params)["uri"].is_string())
+            if (!req.params || !req.params->is_object() || !req.params->contains("uri") || !(*req.params)["uri"].is_string() ||
+                !valid_resource_uri((*req.params)["uri"].get_ref<const std::string&>()))
                 return failure(req.id, error_code::invalid_params, "Invalid resource parameters");
             const auto found = resources_.find((*req.params)["uri"].get_ref<const std::string&>());
             if (found == resources_.end()) return failure(req.id, -32002, "Resource not found");
