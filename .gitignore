@@ -58,3 +58,6 @@ out/
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
+
+# Local interop verifier dependencies
+/tests/interop/node_modules/
