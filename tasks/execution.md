@@ -128,3 +128,16 @@ Ruling: Exercise application-worker ownership through a minimal typed static res
 - T11 complete: `fce5e1b`, independent spec and quality review approved (`build/execution/T11-review.md`); static registration, schema validation, list/call and result/error channels.
 - T12 implemented as `8a39fc1`: initial RED failed 3 policy cases; targeted MSVC GREEN passed 23/23. Review found an oversized fallback response with a long ID; a new focused RED reproduced it, then GREEN passed all5 policy cases/68 assertions. Scoped rereview approved (`build/execution/T12-fix-review.md`).
 - Final MSVC selection passed48/48 and equivalent Ubuntu WSL/GCC15.2 selection passed46/46, including tool, policy, lifecycle, ownership, schema (including the official gate) and stdio. A raw Windows GNU child-process probe also passed actual tool listing/call, schema rejection, access denial, output filtering, ping and graceful EOF. This is not official-client or named-host verification. See [T12 checkpoint](checkpoint-t12.md) for commands and scope.
+
+## Resumed: T13-T15, 2026-10-28
+
+- User authorized work through T15, then a report. T16-T21 and README remain deferred.
+- T13 implementation reports focused MSVC24/24; task report/review still pending.
+- T14 prompt regression fixture is prepared in `tests/prompts.cpp`; isolated RED confirms the missing `register_prompt` interface (`build/execution/T14-red-compile.log`). It is not yet integrated or complete.
+- Ruling: Prepare the independent T15 reference state and test while the T13 resource implementation runs, without touching its server/CMake files; defer integration and completion until T14 is reviewed. The tool counter records status-tool invocations, while resource and prompt reads observe the same state, allowing matching snapshots without fixed metrics. Cost if wrong: bounded example/state refactoring once the prompt API is finalized. The T15 missing-header RED is recorded in `build/execution/T15-red-compile.log`.
+- T13 reviewed and committed as `2c9eea6`; focused MSVC resource/lifecycle/policy selection24/24 passed. T14 source is being implemented and its RED fixture is in place.
+- Ruling: Give consecutive invalid tool/prompt requests distinct test IDs. A response can be received before worker-side request retirement, so immediate ID reuse can spuriously trigger the deliberately enforced duplicate-in-flight rule. This changes test hygiene only; the original behavior remains covered. Cost if wrong: minor fixture maintenance.
+
+- T14 reviewed and committed as `24f90e0`: MSVC prompt/resource/policy/lifecycle/ownership selection 25/25, prompt case 38 assertions. Review approves spec and quality.
+- T15 source reviewed and committed as `39f8e86`; fake-clock case passed 14 assertions, Windows native stdio smoke passed. Full aggregate gates are running. Fixture ID correction committed separately as `e8b7dd5`.
+- T13-T15 final verification: Windows/MSVC unfiltered CTest 104/104 and Ubuntu WSL/GCC 103/103; fresh downstream consumers and both real-process stdio probes passed on each platform. The mandatory official schema gate is included. All three task reviews approve source/spec and quality. See [T15 checkpoint](checkpoint-t15.md). T16-T21 and README remain pending.

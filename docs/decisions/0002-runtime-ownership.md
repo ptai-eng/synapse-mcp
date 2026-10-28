@@ -1,6 +1,6 @@
 # ADR-002: Owned stdio work and cooperative shutdown
 
-- Status: Runtime and tool policy implemented through T12; full M1 qualification pending
+- Status: Runtime, text methods and native reference implemented through T15; full M1 qualification pending
 - Date: 2026-10-25
 - Implementation checkpoint: [T10 review record](../../tasks/checkpoint-t10.md), 2026-10-26
 - Scope: [M1 native stdio specification](../../specs/001-native-stdio-foundation/spec.md)

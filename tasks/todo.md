@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T12 are complete and reviewed; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md) and [execution.md](execution.md) for local verification and decisions. T13-T21 remain pending. Do not mark a task complete from document review alone.
+Status: T01-T15 are complete and reviewed; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md) and [execution.md](execution.md) for local verification and decisions. T16-T21 remain pending. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -132,31 +132,31 @@ Depends: T11. Files (4): `include/synapse/detail/server_policy.hpp`, `include/sy
 
 Depends: T10, T12. Files (3): `include/synapse/server.hpp`, `tests/resources.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.resources.text_snapshot` asserts URI/name/MIME list/read, optional metadata, empty template list, missing URI/unknown resource and sanitized callback failure; no subscribe/listChanged claims.
-- [ ] Run resource tests and record the current failures.
-- [ ] Route registered resource handlers through the same owned worker and output policy; return `contents` text entries and the selected revision's resource-not-found error.
-- [ ] GREEN: resources plus lifecycle/policy tests; no unregistered resource callback executes.
-- [ ] Review and commit `feat: expose registered text resources`.
+- [x] RED: `M1.resources.text_snapshot` asserts URI/name/MIME list/read, optional metadata, empty template list, missing URI/unknown resource and sanitized callback failure; no subscribe/listChanged claims.
+- [x] Run resource tests and record the current failures.
+- [x] Route registered resource handlers through the same owned worker and output policy; return `contents` text entries and the selected revision's resource-not-found error.
+- [x] GREEN: resources plus lifecycle/policy tests; no unregistered resource callback executes.
+- [x] Review and commit `feat: expose registered text resources`.
 
 ## T14: Complete text prompts
 
 Depends: T13. Files (3): `include/synapse/server.hpp`, `tests/prompts.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.prompts.text_messages` asserts list/get, required/unknown/wrong-type arguments, user/assistant roles and sanitized handler failure; no completion or multimodal claim.
-- [ ] Run prompt tests before implementation.
-- [ ] Validate argument contracts, dispatch the typed prompt handler on the owned worker and apply output policy to every returned text/description.
-- [ ] GREEN: prompts plus resource/policy/lifecycle tests; capability flags match actual registered features.
-- [ ] Review and commit `feat: expose registered text prompts`.
+- [x] RED: `M1.prompts.text_messages` asserts list/get, required/unknown/wrong-type arguments, user/assistant roles and sanitized handler failure; no completion or multimodal claim.
+- [x] Run prompt tests before implementation.
+- [x] Validate argument contracts, dispatch the typed prompt handler on the owned worker and apply output policy to every returned text/description.
+- [x] GREEN: prompts plus resource/policy/lifecycle tests; capability flags match actual registered features.
+- [x] Review and commit `feat: expose registered text prompts`.
 
 ## T15: Build the native reference application
 
 Depends: T12-T14. Files (5): `examples/native_status_state.hpp`, `examples/native_status.cpp`, `examples/CMakeLists.txt`, `tests/native_status.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.reference.real_state` advances a fake monotonic clock and operation count, then asserts matching tool/resource snapshots and an `explain_status` prompt. No fixed machine metrics or dummy hash.
-- [ ] Run reference tests and observe missing application behavior.
-- [ ] Add the real-state application and executable `native_status`; use explicit app identity, clean stderr diagnostics, inherited stdio and owner-thread lifetime.
-- [ ] GREEN: reference tests, executable build and the full unit suite.
-- [ ] Review and commit `feat: add the native status integration`.
+- [x] RED: `M1.reference.real_state` advances a fake monotonic clock and operation count, then asserts matching tool/resource snapshots and an `explain_status` prompt. No fixed machine metrics or dummy hash.
+- [x] Run reference tests and observe missing application behavior.
+- [x] Add the real-state application and executable `native_status`; use explicit app identity, clean stderr diagnostics, inherited stdio and owner-thread lifetime.
+- [x] GREEN: reference tests, executable build and the full unit suite.
+- [x] Review and commit `feat: add the native status integration`.
 
 ## T16: Pin the development verifier tools
 
