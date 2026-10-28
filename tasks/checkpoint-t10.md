@@ -1,5 +1,7 @@
 # T10 foundation checkpoint
 
+This records the T01-T10 checkpoint on 2026-10-27. The subsequent [T11-T12 checkpoint](checkpoint-t12.md) adds tool dispatch and local policies.
+
 Date: 2026-10-27. Branch: `codex/product-protocol-foundation`.
 Foundation implementation: `d919cfe..dd35713`. Commits remain local.
 

@@ -16,6 +16,8 @@ Planning is complete when this document, the task checklist and decision records
 
 Execution update (2026-10-26): see the [T10 checkpoint](checkpoint-t10.md) and [execution ledger](execution.md) for the implemented runtime and outstanding schema qualification. The paragraph above records the original planning baseline.
 
+Execution update (2026-10-28): T11-T12 tool dispatch and local policy work is recorded in the [T12 checkpoint](checkpoint-t12.md); later tasks remain pending.
+
 Use an implementation agent and a fresh reviewer for each task. Serialize edits to shared headers and CMake files; parallelize independent investigations/tests only after their shared interfaces exist. Checkpoints require evidence and review, not repeated authorization for work the user has already delegated. Do not publish releases, push commits or configure a user's global MCP catalog as part of this plan.
 
 ## Global constraints
@@ -47,6 +49,7 @@ Each condition has a named owning task and must appear in its tests:
 | `include/synapse/errors.hpp` | `sdk_errc`, `sdk_error`, `handler_error`; separate local diagnostics from wire `error` |
 | `include/synapse/handlers.hpp` | `request_context` and text-only tool/resource/prompt results and callbacks, as pinned in ADR-002 |
 | `include/synapse/server_options.hpp` | Server/stdio limits and application policy hooks |
+| `include/synapse/detail/server_policy.hpp` | Worker-owned tool admission, quota and output checks |
 | `include/synapse/detail/message_decoder.hpp` | `decode_message(const nlohmann::json&) -> expected<incoming_message,response>`; validate before dispatch |
 | `include/synapse/detail/schema_validator.hpp` | `compile_schema` and `compiled_schema::validate`, exactly as ADR-003; no backend types in public handlers |
 | `include/synapse/detail/owned_executor.hpp` | One worker, bounded FIFO, per-operation cancellation and owner-thread join |

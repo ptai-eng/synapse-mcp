@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T10 are complete and reviewed; see [checkpoint-t10.md](checkpoint-t10.md) and [execution.md](execution.md) for local verification and decisions. T11-T21 remain pending. Do not mark a task complete from document review alone.
+Status: T01-T12 are complete and reviewed; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md) and [execution.md](execution.md) for local verification and decisions. T13-T21 remain pending. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -112,21 +112,21 @@ Checkpoint: scoped runtime completion under the recorded T05 exception, with min
 
 Depends: T05, T10. Files (3): `include/synapse/server.hpp`, `tests/tools.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.tools.validation_and_results` asserts list/call, a text result, empty-object defaults, malformed arguments/unknown tools as RPC errors and schema/domain failures as `isError:true`; callbacks never run on rejected inputs.
-- [ ] Run tool tests; the schema qualification gate must already be green.
-- [ ] Compile schemas during static registration, enforce MCP root input-schema structure and use immutable validators on the application worker. Map engine failures and exceptions to sanitized internal errors; advertise only the registered scope.
-- [ ] GREEN: tools, schema and lifecycle groups; no raw exception/instance value appears in wire diagnostics.
-- [ ] Review and commit `feat: validate and dispatch registered tools`.
+- [x] RED: `M1.tools.validation_and_results` asserts list/call, a text result, empty-object defaults, malformed arguments/unknown tools as RPC errors and schema/domain failures as `isError:true`; callbacks never run on rejected inputs.
+- [x] Run tool tests; the schema qualification gate must already be green.
+- [x] Compile schemas during static registration, enforce MCP root input-schema structure and use immutable validators on the application worker. Map engine failures and exceptions to sanitized internal errors; advertise only the registered scope.
+- [x] GREEN: tools, schema and lifecycle groups; no raw exception/instance value appears in wire diagnostics.
+- [x] Review and commit `feat: validate and dispatch registered tools`.
 
 ## T12: Enforce local invocation/output policy
 
 Depends: T11. Files (4): `include/synapse/detail/server_policy.hpp`, `include/synapse/server.hpp`, `tests/server_policy.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: `M1.policy.access_rate_output` requires denied calls not to execute, the 17th same-instant call to hit the 16-token burst, fake-clock refill and control-message responsiveness. Invalid UTF-8/forbidden controls/oversize output are rejected, and a custom filter can redact a known fixture secret.
-- [ ] Run policy tests with an injected clock; no sleeps for rate assertions.
-- [ ] Apply authorization -> quota -> schema -> callback -> output policy on the single worker. Use ADR-002's `-32050/-32051/-32052` admission errors; preserve `-32002` for resource-not-found. Check final encoded frames and keep exception details private.
-- [ ] GREEN: policy/tool tests, bounded queue cases and tests showing custom hooks execute on the application worker.
-- [ ] Review and commit `feat: enforce local invocation policies`.
+- [x] RED: `M1.policy.access_rate_output` requires denied calls not to execute, the 17th same-instant call to hit the 16-token burst, fake-clock refill and control-message responsiveness. Invalid UTF-8/forbidden controls/oversize output are rejected, and a custom filter can redact a known fixture secret.
+- [x] Run policy tests with an injected clock; no sleeps for rate assertions.
+- [x] Apply authorization -> quota -> schema -> callback -> output policy on the single worker. Use ADR-002's `-32050/-32051/-32052` admission errors; preserve `-32002` for resource-not-found. Check final encoded frames and keep exception details private.
+- [x] GREEN: policy/tool tests, bounded queue cases and tests showing custom hooks execute on the application worker.
+- [x] Review and commit `feat: enforce local invocation policies`.
 
 ## T13: Complete text resources
 

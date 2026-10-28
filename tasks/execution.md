@@ -23,7 +23,9 @@ Plan: [plan.md](plan.md). Checklist: [todo.md](todo.md).
 | T08 | Complete; reviewed | `94f58ac`; native MSVC9cases/978assertions; 31/31 selected regression |
 | T09 | Complete; reviewed | `8fd8d25`; Windows16/16, Linux14/14 |
 | T10 | Complete; reviewed | `bcfcb0e`, `56ef7ff`, `2138f90`; full current Windows95/95 and WSL94/94, including schema gate |
-| T11-T21 | Deferred by user | Stop after T10 checkpoint for user review; README last |
+| T11 | Complete; reviewed | `fce5e1b`; schema-validated tool registration/list/call |
+| T12 | Complete; fix reviewed | `8a39fc1`; policy and final-frame handling |
+| T13-T21 | Deferred by user | Stop after T12; README last |
 ## Reviews and decisions
 
 T01 and T02 passed scoped compliance and quality review with no blocking findings. T02 has a nonblocking single-config build-type forwarding caveat, to carry into final checkpoint verification.
@@ -117,3 +119,12 @@ Ruling: Exercise application-worker ownership through a minimal typed static res
 - T05 review fixes committed as `dd35713`: the CMake3.20-compatible populated fixture and query-preserving custom-dialect lookup are implemented. Focused run passed1302/1302 mandatory cases (zero skips;2415 assertions/7 cases), CMake3.20/current parent fixtures pass, and the optimized WSL provenance fixture passed in89.96s within its unchanged120s limit. Scoped rereview approves spec and quality with no open findings (`build/execution/T05-review-fix-review.md`).
 - Final Windows/MSVC unfiltered CTest passed95/95; final Ubuntu WSL/GCC15.2 unfiltered CTest passed94/94. Fresh downstream consumers and raw-wire numeric-overflow/EOF probes passed on both. A CMake3.20.5 fresh consumer also configured, built and ran successfully. Full logs and transcripts are under `build/execution/T01-T10-final-*`.
 - T01-T10 foundation completion: independent baseline review found F1/F2/F3; `4286da6`, `ff4fb90` and `dd35713` address them and the additional schema-review findings. Scoped rereviews approve spec and quality with no open findings. T05's mandatory schema suite runs1302/1302 cases with zero skips. README and T11-T21 remain pending; this is not a full M1 or host-compatibility claim.
+
+## Resumed: T11-T12, 2026-10-28
+
+- User authorized T11-T12, followed by a report; leave T13-T21 and README pending.
+- T11 RED observed missing tool registration; implementation and targeted Windows schema/lifecycle tests are underway. T12 tests and policy module are prepared separately.
+- Ruling: Expose the stdio transport's effective encoded-frame capacity to the server for T12 output checks. The server otherwise cannot reject oversized handler output as a tool failure before transport admission; the accessor is read-only and retains the existing limits. Cost if wrong: a small public accessor and transport/server integration rework, covered by encoded-output and transport regressions.
+- T11 complete: `fce5e1b`, independent spec and quality review approved (`build/execution/T11-review.md`); static registration, schema validation, list/call and result/error channels.
+- T12 implemented as `8a39fc1`: initial RED failed 3 policy cases; targeted MSVC GREEN passed 23/23. Review found an oversized fallback response with a long ID; a new focused RED reproduced it, then GREEN passed all5 policy cases/68 assertions. Scoped rereview approved (`build/execution/T12-fix-review.md`).
+- Final MSVC selection passed48/48 and equivalent Ubuntu WSL/GCC15.2 selection passed46/46, including tool, policy, lifecycle, ownership, schema (including the official gate) and stdio. A raw Windows GNU child-process probe also passed actual tool listing/call, schema rejection, access denial, output filtering, ping and graceful EOF. This is not official-client or named-host verification. See [T12 checkpoint](checkpoint-t12.md) for commands and scope.

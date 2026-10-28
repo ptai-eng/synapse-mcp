@@ -1,6 +1,6 @@
 # ADR-002: Owned stdio work and cooperative shutdown
 
-- Status: Runtime implemented through T10; full M1 qualification pending
+- Status: Runtime and tool policy implemented through T12; full M1 qualification pending
 - Date: 2026-10-25
 - Implementation checkpoint: [T10 review record](../../tasks/checkpoint-t10.md), 2026-10-26
 - Scope: [M1 native stdio specification](../../specs/001-native-stdio-foundation/spec.md)
@@ -99,6 +99,8 @@ Use a monotonic clock injectable by tests. Authorized tool-call attempts consume
 `allow_tool` has signature `bool(std::string_view tool_name, const request_context&)`. An empty policy permits only registered tools; a supplied policy can deny a registered tool. `filter_output` has signature `expected<std::string, handler_error>(std::string_view operation, std::string_view text, const request_context&)`. All custom policy calls run on the application worker and follow the same cooperative/lifetime contract as handlers.
 
 Core output checks require valid UTF-8 and reject C0 control characters except TAB/LF/CR, plus DEL; ESC is therefore rejected. Recheck the encoded frame limit after JSON escaping. An empty output hook does not bypass core checks. Rejected tool output becomes a generic tool failure; rejected resource/prompt output becomes a generic internal RPC error. These checks are explicit local content constraints, not a claim to detect every sensitive value or make all domain output universally safe.
+
+The stdio transport exposes `max_encoded_frame_bytes()` so the server can check the final response before admission. A custom transport may expose the same accessor; otherwise the server uses the default 1 MiB frame cap. If a response ID makes even the sanitized fallback exceed that bound, the server stops without admitting an oversized frame.
 
 Use Synapse admission RPC errors `-32050` for access denied, `-32051` for rate limited and `-32052` for queue full, with stable `error.data.reason` values `access_denied`, `rate_limited` and `queue_full`. Send them only for requests with safely validated IDs. Notifications never receive admission-error responses. Keep `-32002` for resource-not-found, as described by the selected resources specification; do not reuse it for quota errors. [Resource errors](https://modelcontextprotocol.io/specification/2025-11-25/server/resources#error-handling).
 
