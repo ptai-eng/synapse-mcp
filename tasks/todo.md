@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T17 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T18-T21 remain pending. Do not mark a task complete from document review alone.
+Status: T01-T18 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T19 requires hosted CI evidence; T20-T21 are deferred. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -182,11 +182,11 @@ Depends: T16. Files (4): `tests/interop/run-client.mjs`, `cmake/InteropTools.cma
 
 Depends: T17. Files (3): `tests/interop/process.test.mjs`, `tests/fixtures/process_server.cpp`, `tests/CMakeLists.txt`.
 
-- [ ] RED: subprocess cases cover malformed valid JSON followed by a working ping, idle/cooperative EOF <=2s, stop while stdin remains open, blocked stdout, handle/FD cleanup and a gated non-cooperative callback whose `wait_for` returns false until its test gate is released.
-- [ ] Record failures against the old behavior/control fixture. Keep only the test's child handles/PIDs for cleanup.
-- [ ] Implement the raw-child harness and fixture. A forced kill is cleanup after a failed graceful test, never a passing shutdown result. Do not use the SDK close escalation path for the EOF proof.
-- [ ] GREEN: `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.process\.'`; every graceful case exits within its budget, and no child is left running.
-- [ ] Review and commit `test: prove bounded stdio shutdown`.
+- [x] RED: subprocess cases cover malformed valid JSON followed by a working ping, idle/cooperative EOF <=2s, stop while stdin remains open, blocked stdout, handle/FD cleanup and a gated non-cooperative callback whose `wait_for` returns false until its test gate is released.
+- [x] Record failures against the old behavior/control fixture. Keep only the test's child handles/PIDs for cleanup.
+- [x] Implement the raw-child harness and fixture. A forced kill is cleanup after a failed graceful test, never a passing shutdown result. Do not use the SDK close escalation path for the EOF proof.
+- [x] GREEN: `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.process\.'`; every graceful case exits within its budget, and no child is left running.
+- [x] Review and commit `test: prove bounded stdio shutdown`.
 
 ## T19: Run the supported CI matrix
 
@@ -223,6 +223,6 @@ Depends: T20 and all checkpoint evidence. Files (5): `README.md`, `docs/migratio
 - [x] Dependency/consumer: T01-T03 evidence reviewed.
 - [x] Boundary/schema/executor: T04-T06 evidence reviewed.
 - [x] I/O: T07-T09 evidence reviewed on both supported platforms.
-- [ ] Methods: T10-T14 evidence reviewed.
-- [ ] Reference/interop: T15-T18 evidence reviewed.
+- [x] Methods: T10-T14 evidence reviewed.
+- [x] Reference/interop: T15-T18 evidence reviewed.
 - [ ] Release evidence: T19-T21 meet every acceptance criterion; unavailable checks remain explicit blockers to their support claims.

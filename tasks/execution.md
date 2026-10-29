@@ -171,3 +171,20 @@ Ruling: Exercise application-worker ownership through a minimal typed static res
 - T17 initial review requested R1 stale evidence, R2 configure-time provenance, R3 watchdog/close cleanup and R4 exact STL metadata. Repairs included mutation/negative controls and durable regressions. The first repair rereview approved R1/R2/R4; final R3 rereview approved deterministic close-stage testing and actual native/metadata child reaping, no new findings.
 - Final native Windows/MSVC official-client/verifier selection passed 4/4 in 4.12s; Ubuntu WSL/GCC passed 4/4 in 31.76s across four sequential cases (each under 30s). Actual transcripts assert 2025-11-25 and initialized plus tool/resource/prompt native-state flows. The exact STL probe reports MSVC 143/update 202503 and libstdc++ 20260321. Source/tests committed `78027b9`. No core source change followed the completed T11-T15 audit.
 - T16/T17 complete, reviews clean; [checkpoint](checkpoint-t17.md). T18-T21, named-host walkthrough, CI and README remain pending. No push or publication occurred.
+
+## Resumed: finish T18-T21, 2026-10-29
+
+- User authorized completing T18-T21. Existing T01-T17 checkpoint remains valid; preserve .understand-anything and keep global MCP catalogs unchanged.
+- T18 implemented and reviewed, commit `1aa2ecc`: raw-process Windows7/7 and Ubuntu7/7 post-review pass. Seven original negative controls plus idle/blocked early-success-exit controls fail correctly. Two review findings (fixture lifetime and pre-trigger exit oracle) were fixed and rereviewed; no core change.
+- T19 prepared official action SHAs, exact GCC registry digest and Windows toolchain selection. Local workflow/modules implementation is authorized; remote branch publication is not yet authorized by this plan and remains a concrete final-step request before actual hosted runs. No local test substitutes for hosted CI evidence.
+- Ruling: prepare the independent Inspector config and local host walkthrough while T19 workflow implementation proceeds, because T19 changes only verifier infrastructure and the native reference interface is stable. Keep T19/T20 qualification labels pending until their own actual evidence/reviews pass. Cost if wrong: repeat the host walkthrough if CI uncovers a runtime correction; no support claim is inferred from preparation.
+
+### Scope adjustment and T18 handoff
+
+- User is near usage limits and explicitly requested stopping after T18-T19. T20 preparation stopped without product edits, UI launch or catalog changes; T21 has not started. Inspector research resume notes remain ignored in build/execution/T20-paused.md.
+- T18 checkpoint is recorded in [checkpoint-t18.md](checkpoint-t18.md); two P2 review findings are fixed and rereviewed clean. T19 workflow/modules are being locally verified; actual hosted matrix remains pending, and no push is authorized or performed.
+
+### Stop for usage, 2026-10-29
+
+- User requested status and stopping around T18-T19 because usage is nearly exhausted. T18 is complete, reviewed and committed as1aa2ecc. T19 implementation/local checks are ready, but its independent reviewer hit the account usage limit before returning a verdict. Therefore T19 review and hosted CI/sanitizer/failed-job evidence remain pending; T19 is NOT complete.
+- Preserve the uncommitted T19 changes in .github/workflows/ci.yml and new cmake/RecordEnvironment.cmake / Sanitizers.cmake. Resume from build/execution/T19-report.md and T19-review.diff; obtain a fresh independent source review before any publication request. No push/dispatch occurred. T20-T21 remain deferred.
