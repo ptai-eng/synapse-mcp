@@ -2,23 +2,198 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "feature/*" ]
+    branches: [master, 'codex/**']
   pull_request:
-    branches: [ "main" ]
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      failure_probe:
+        description: 'Intentional failing CI gate control (none for verification)'
+        type: choice
+        default: none
+        options: [none, unit, schema, consumer, interop]
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  linux:
+    name: Linux GCC 14.4 / ${{ matrix.sanitizer }}
     runs-on: ubuntu-24.04
-
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: ${{ fromJSON(inputs.failure_probe != '' && inputs.failure_probe != 'none' && '["none"]' || '["none","address-undefined","thread"]') }}
+    container:
+      image: gcc:14.4.0@sha256:435c3cbc2ad1c25fbc1684c367808ff0ca2035a1bed56734a40165ab5cd7e3bd
+      # TSan's scoped setarch needs personality(2). No host sysctl is changed.
+      options: ${{ matrix.sanitizer == 'thread' && '--security-opt seccomp=unconfined' || '' }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      SYNAPSE_CONTAINER_IMAGE: gcc:14.4.0@sha256:435c3cbc2ad1c25fbc1684c367808ff0ca2035a1bed56734a40165ab5cd7e3bd
+      SYNAPSE_SANITIZER: ${{ matrix.sanitizer }}
+      FAILURE_PROBE: ${{ inputs.failure_probe || 'none' }}
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      TSAN_OPTIONS: halt_on_error=1
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Provision build tools inside the pinned container
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install --yes --no-install-recommends cmake ninja-build ca-certificates util-linux
+          test "$(g++ -dumpfullversion)" = '14.4.0'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          package-manager-cache: false
+      - name: Install locked development verifiers
+        run: npm --prefix tests/interop ci --ignore-scripts
+      - name: Prepare test gate and observed negative controls
+        run: |
+          set -euo pipefail
+          mkdir -p build/ci/evidence
+          cat > build/ci-gate.sh <<'GATE'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          runtime=()
+          if [[ "${SYNAPSE_SANITIZER}" == thread ]]; then runtime=(setarch x86_64 -R); fi
+          "${runtime[@]}" ctest --output-on-failure --no-tests=error "$@"
+          GATE
+          for family in unit schema consumer interop; do
+            control="build/controls/${family}"
+            mkdir -p "$control"
+            printf 'add_test(synapse.M1.%s.control "%s" -E false)\n' "$family" "$(command -v cmake)" > "$control/CTestTestfile.cmake"
+            if bash build/ci-gate.sh --test-dir "$control" > "build/ci/evidence/control-${family}.log" 2>&1; then
+              echo "Gate accepted a failing ${family} case" >&2
+              exit 1
+            fi
+            grep -q '0% tests passed, 1 tests failed' "build/ci/evidence/control-${family}.log"
+          done
+          mkdir -p build/controls/pass
+          printf 'add_test(control "%s" -E true)\n' "$(command -v cmake)" > build/controls/pass/CTestTestfile.cmake
+          bash build/ci-gate.sh --test-dir build/controls/pass > build/ci/evidence/control-pass.log 2>&1
+      - name: Configure supported compiler and sanitizer runtime
+        run: |
+          set -euo pipefail
+          runtime=()
+          if [[ "$SYNAPSE_SANITIZER" == thread ]]; then
+            runtime=(setarch x86_64 -R)
+            "${runtime[@]}" true
+          fi
+          "${runtime[@]}" cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_PROJECT_synapse_mcp_INCLUDE="$PWD/cmake/Sanitizers.cmake" \
+            -DSYNAPSE_SANITIZER="$SYNAPSE_SANITIZER" \
+            -DSYNAPSE_MCP_BUILD_EXAMPLES=ON -DSYNAPSE_MCP_BUILD_TESTS=ON \
+            -DSYNAPSE_MCP_BUILD_INTEROP_TESTS=ON 2>&1 | tee build/ci/evidence/configure.log
+      - name: Build native applications and tests
+        run: |
+          set -euo pipefail
+          runtime=()
+          if [[ "$SYNAPSE_SANITIZER" == thread ]]; then runtime=(setarch x86_64 -R); fi
+          "${runtime[@]}" cmake --build build/ci --parallel 2 2>&1 | tee build/ci/evidence/build.log
+      - name: Record actual standard library and verifier versions
+        run: |
+          set -euo pipefail
+          runtime=()
+          if [[ "$SYNAPSE_SANITIZER" == thread ]]; then runtime=(setarch x86_64 -R); fi
+          "${runtime[@]}" cmake -DSYNAPSE_RECORD_BUILD_DIR="$PWD/build/ci" \
+            -DSYNAPSE_ENVIRONMENT_PROBE="$PWD/build/ci/tests/synapse_interop_environment" \
+            -P cmake/RecordEnvironment.cmake
+          npm --version > build/ci/evidence/npm-version.txt
+      - name: Run unit, schema, consumer, process and official SDK gates
+        run: |
+          set -euo pipefail
+          # Dispatch controls affect only disposable generated CTest metadata.
+          case "$FAILURE_PROBE" in
+            none) ;;
+            unit|schema|consumer|interop)
+              printf '\nadd_test(synapse.M1.%s.ci_failure_probe "%s" -E false)\n' "$FAILURE_PROBE" "$(command -v cmake)" >> build/ci/CTestTestfile.cmake ;;
+            *) exit 1 ;;
+          esac
+          for family in unit schema consumer process interop; do
+            if [[ "$FAILURE_PROBE" != none && "$FAILURE_PROBE" != "$family" ]]; then continue; fi
+            case "$family" in
+              unit) filter=(-E '^synapse\.(schema\.|M1\.(schema|consumer|process|interop)\.)') ;;
+              schema) filter=(-R '^synapse\.(schema\.|M1\.schema\.)') ;;
+              *) filter=(-R "^synapse\\.M1\\.${family}\\.") ;;
+            esac
+            bash build/ci-gate.sh --test-dir build/ci "${filter[@]}" \
+              --output-log "$PWD/build/ci/evidence/ctest-${family}.log"
+          done
+      - name: Retain bounded evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-${{ matrix.sanitizer }}-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/ci/evidence/
+            build/ci/Testing/Temporary/
+            build/ci/CMakeFiles/CMakeConfigureLog.yaml
 
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
-
-    - name: Build
-      run: cmake --build ${{github.workspace}}/build --config Release
-
-    - name: Test
-      working-directory: ${{github.workspace}}/build
-      run: ctest -C Release --output-on-failure
+  windows:
+    name: Windows 2022 / VS 14.44 / SDK 26100
+    if: inputs.failure_probe == '' || inputs.failure_probe == 'none'
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          package-manager-cache: false
+      - name: Install locked development verifiers
+        run: |
+          npm --prefix tests/interop ci --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Configure the declared Windows toolchain
+        run: |
+          New-Item -ItemType Directory -Force build/ci/evidence | Out-Null
+          cmake -S . -B build/ci -G 'Visual Studio 17 2022' -A x64 -T 'v143,version=14.44' `
+            -DCMAKE_SYSTEM_VERSION=10.0.26100.0 `
+            "-DCMAKE_PROJECT_synapse_mcp_INCLUDE=$PWD/cmake/Sanitizers.cmake" `
+            -DSYNAPSE_SANITIZER=none -DSYNAPSE_MCP_BUILD_EXAMPLES=ON `
+            -DSYNAPSE_MCP_BUILD_TESTS=ON -DSYNAPSE_MCP_BUILD_INTEROP_TESTS=ON 2>&1 |
+            Tee-Object build/ci/evidence/configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build native applications and tests
+        run: |
+          cmake --build build/ci --config Debug --parallel 2 2>&1 | Tee-Object build/ci/evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Record actual standard library and verifier versions
+        run: |
+          cmake "-DSYNAPSE_RECORD_BUILD_DIR=$PWD/build/ci" `
+            "-DSYNAPSE_ENVIRONMENT_PROBE=$PWD/build/ci/tests/Debug/synapse_interop_environment.exe" `
+            -P cmake/RecordEnvironment.cmake
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --version | Set-Content build/ci/evidence/npm-version.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run the complete supported profile
+        run: |
+          ctest --test-dir build/ci -C Debug --output-on-failure --no-tests=error `
+            --output-log "$PWD/build/ci/evidence/ctest-all.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain bounded evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/ci/evidence/
+            build/ci/Testing/Temporary/
+            build/ci/CMakeFiles/CMakeConfigureLog.yaml

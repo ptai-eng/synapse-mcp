@@ -1,0 +1,71 @@
+cmake_minimum_required(VERSION 3.20)
+
+# Only explicit configuration facts and allowlisted runner identifiers are saved.
+# Never serialize the complete process environment or credential-bearing Git config.
+function(_synapse_record key value)
+    string(REPLACE "\\" "\\\\" value "${value}")
+    string(REPLACE "\"" "\\\"" value "${value}")
+    string(REPLACE "\n" "\\n" value "${value}")
+    string(REPLACE "\r" "\\r" value "${value}")
+    string(REPLACE "\t" "\\t" value "${value}")
+    string(JSON _synapse_environment SET "${_synapse_environment}" "${key}" "\"${value}\"")
+    set(_synapse_environment "${_synapse_environment}" PARENT_SCOPE)
+endfunction()
+
+if(CMAKE_SCRIPT_MODE_FILE)
+    if(NOT SYNAPSE_RECORD_BUILD_DIR OR NOT SYNAPSE_ENVIRONMENT_PROBE)
+        message(FATAL_ERROR "RecordEnvironment requires SYNAPSE_RECORD_BUILD_DIR and the built SYNAPSE_ENVIRONMENT_PROBE")
+    endif()
+    file(READ "${SYNAPSE_RECORD_BUILD_DIR}/evidence/environment-configure.json" _synapse_environment)
+    execute_process(COMMAND "${SYNAPSE_ENVIRONMENT_PROBE}" RESULT_VARIABLE _probe_status
+        OUTPUT_VARIABLE _stdlib ERROR_VARIABLE _probe_error OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT _probe_status EQUAL 0 OR _stdlib STREQUAL "")
+        message(FATAL_ERROR "Compiled standard-library probe failed (${_probe_status}): ${_probe_error}")
+    endif()
+    _synapse_record(standard_library "${_stdlib}")
+    find_program(_node NAMES node node.exe REQUIRED)
+    execute_process(COMMAND "${_node}" --version RESULT_VARIABLE _node_status
+        OUTPUT_VARIABLE _node_version OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT _node_status EQUAL 0 OR NOT _node_version STREQUAL "v24.22.1")
+        message(FATAL_ERROR "Environment evidence requires Node v24.22.1; found ${_node_version}")
+    endif()
+    _synapse_record(node "${_node_version}")
+    string(JSON _source GET "${_synapse_environment}" source_directory)
+    foreach(_package IN ITEMS client inspector)
+        file(READ "${_source}/tests/interop/node_modules/@modelcontextprotocol/${_package}/package.json" _manifest)
+        string(JSON _version GET "${_manifest}" version)
+        _synapse_record("${_package}_version" "${_version}")
+    endforeach()
+    file(WRITE "${SYNAPSE_RECORD_BUILD_DIR}/evidence/environment.json" "${_synapse_environment}\n")
+else()
+    set(_synapse_environment "{}")
+    foreach(_key IN ITEMS CMAKE_VERSION CMAKE_GENERATOR CMAKE_GENERATOR_PLATFORM CMAKE_GENERATOR_TOOLSET
+            CMAKE_SYSTEM_NAME CMAKE_SYSTEM_VERSION CMAKE_SYSTEM_PROCESSOR
+            CMAKE_HOST_SYSTEM_NAME CMAKE_HOST_SYSTEM_VERSION CMAKE_HOST_SYSTEM_PROCESSOR CMAKE_CXX_COMPILER
+            CMAKE_CXX_COMPILER_ID CMAKE_CXX_COMPILER_VERSION CMAKE_CXX_COMPILER_TARGET
+            CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION CMAKE_VS_PLATFORM_TOOLSET_VERSION SYNAPSE_SANITIZER)
+        _synapse_record("${_key}" "${${_key}}")
+    endforeach()
+    _synapse_record(source_directory "${CMAKE_SOURCE_DIR}")
+    foreach(_key IN ITEMS ImageOS ImageVersion RUNNER_OS RUNNER_ARCH GITHUB_RUN_ID GITHUB_RUN_ATTEMPT
+            GITHUB_SHA SYNAPSE_CONTAINER_IMAGE)
+        _synapse_record("${_key}" "$ENV{${_key}}")
+    endforeach()
+    cmake_host_system_information(RESULT _host_version QUERY OS_VERSION)
+    _synapse_record(host_os_version "${_host_version}")
+    find_package(Git REQUIRED)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${CMAKE_SOURCE_DIR}" rev-parse HEAD
+        RESULT_VARIABLE _git_status OUTPUT_VARIABLE _commit OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT _git_status EQUAL 0)
+        message(FATAL_ERROR "Cannot identify source commit for CI evidence")
+    endif()
+    _synapse_record(source_commit "${_commit}")
+    execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${CMAKE_SOURCE_DIR}" status --porcelain --untracked-files=no
+        RESULT_VARIABLE _git_status OUTPUT_VARIABLE _dirty OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT _git_status EQUAL 0)
+        message(FATAL_ERROR "Cannot identify source worktree status")
+    endif()
+    _synapse_record(tracked_worktree_changes "${_dirty}")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/evidence")
+    file(WRITE "${CMAKE_BINARY_DIR}/evidence/environment-configure.json" "${_synapse_environment}\n")
+endif()
