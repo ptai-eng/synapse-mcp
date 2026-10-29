@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T19 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T19 hosted qualification is recorded in [checkpoint-t19.md](checkpoint-t19.md); T20 is deferred by the user; the authorized non-README T21 slice is complete ([checkpoint](checkpoint-t21.md)). README edits and full M1 qualification remain pending. Do not mark a task complete from document review alone.
+Status: T01-T20 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T19 hosted qualification is recorded in [checkpoint-t19.md](checkpoint-t19.md); T20 named-host evidence is recorded in [checkpoint-t20.md](checkpoint-t20.md); the authorized non-README T21 slice is complete ([checkpoint](checkpoint-t21.md)). README edits and full M1 qualification remain pending. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -202,11 +202,11 @@ Depends: T02, T17-T18. Files (3): `.github/workflows/ci.yml`, `cmake/RecordEnvir
 
 Depends: T19. Files (2): `tests/interop/inspector-config.mjs`, `docs/verification/m1.md`.
 
-- [ ] RED: generated read-only config must contain the absolute reference binary path, `protocolEra:'legacy'` and 5s request/connection limits; a record without actual transcript/version evidence is pending, not verified.
-- [ ] Run `npm exec --prefix tests/interop -- mcp-inspector --web --config build/evidence/inspector.json` after the generator creates that file. Do not change the user's global MCP catalog.
-- [ ] Complete the Inspector Web 2.12.0 tool/resource/prompt walkthrough and export the negotiated `2025-11-25` transcript. Record shared SDK lineage and any environment limitation explicitly.
-- [ ] GREEN only with the actual named-host evidence. CLI smoke checks supplement this walkthrough; they do not imply Codex/Claude/VS Code compatibility.
-- [ ] Review and commit `docs: record verified host evidence`.
+- [x] RED: generated read-only config must contain the absolute reference binary path, `protocolEra:'legacy'` and 5s request/connection limits; a record without actual transcript/version evidence is pending, not verified.
+- [x] Run `npm exec --prefix tests/interop -- mcp-inspector --web --config build/evidence/inspector.json` after the generator creates that file. Do not change the user's global MCP catalog.
+- [x] Complete the Inspector Web 2.12.0 tool/resource/prompt walkthrough and export the negotiated `2025-11-25` transcript. Record shared SDK lineage and any environment limitation explicitly.
+- [x] GREEN only with the actual named-host evidence. CLI smoke checks supplement this walkthrough; they do not imply Codex/Claude/VS Code compatibility.
+- [x] Review and commit `docs: record verified host evidence`.
 
 ## T21: Publish truthful repository documentation
 
