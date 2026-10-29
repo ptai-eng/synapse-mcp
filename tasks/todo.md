@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T18 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T19 requires hosted CI evidence; T20-T21 are deferred. Do not mark a task complete from document review alone.
+Status: T01-T19 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T19 hosted qualification is recorded in [checkpoint-t19.md](checkpoint-t19.md); T20 is active and T21 remains deferred. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -192,11 +192,11 @@ Depends: T17. Files (3): `tests/interop/process.test.mjs`, `tests/fixtures/proce
 
 Depends: T02, T17-T18. Files (3): `.github/workflows/ci.yml`, `cmake/RecordEnvironment.cmake`, `cmake/Sanitizers.cmake`.
 
-- [ ] RED: verify workflow triggers include `master` push/PR and manual dispatch; demonstrate that a failing unit, schema, consumer or interop case fails its job.
-- [ ] Record the baseline missing coverage; resolve action pins from official release SHAs when authoring the workflow rather than inventing them.
-- [ ] Implement the Linux container and Windows toolchain pins in plan.md, run build/unit/schema/consumer/process/SDK checks and retain evidence on failures. Use separate ASan+UBSan and supported TSan configurations; never combine TSan with ASan or call a skipped sanitizer successful.
-- [ ] GREEN: actual matrix results with compiler/stdlib/runner versions and sanitized logs; no Linux binary is run outside its build container.
-- [ ] Review and commit `ci: verify the supported M1 matrix`.
+- [x] RED: verify workflow triggers include `master` push/PR and manual dispatch; demonstrate that a failing unit, schema, consumer or interop case fails its job.
+- [x] Record the baseline missing coverage; resolve action pins from official release SHAs when authoring the workflow rather than inventing them.
+- [x] Implement the Linux container and Windows toolchain pins in plan.md, run build/unit/schema/consumer/process/SDK checks and retain evidence on failures. Use separate ASan+UBSan and supported TSan configurations; never combine TSan with ASan or call a skipped sanitizer successful.
+- [x] GREEN: actual matrix results with compiler/stdlib/runner versions and sanitized logs; no Linux binary is run outside its build container.
+- [x] Review and commit `ci: verify the supported M1 matrix`.
 
 ## T20: Verify a named host
 

@@ -1,20 +1,39 @@
-# T19 CI implementation readiness
+# T19 hosted CI checkpoint
 
-Date: 2026-10-29. Status: implementation and local checks ready; independent review interrupted by the account usage limit, hosted qualification pending. T19/AC-07 is not complete.
+Completed: 2026-10-29. Verified source: `1fa654be73d582e9ae4778da0d757e9112a6bac1`. Independent source and hosted-evidence reviews approve T19.
 
-The workflow now targets master and codex/** pushes, master pull requests and manual dispatch. It pins released GitHub actions by full SHA, Node 24.22.1 and the planned GCC 14.4.0 container digest. Separate Linux functional, ASan+UBSan and TSan rows accompany the Windows 2022 VS 2022/toolset 14.44/SDK 26100.0 row. Native binaries and Node verification run in the same Linux container.
+The [main hosted run](https://github.com/ptai-eng/synapse-mcp/actions/runs/40862549576) passed all four matrix rows:
 
-Local verification includes actionlint, extracted Bash syntax, CMake include-hook configuration, invalid/unsupported sanitizer rejection, actual compiled STL metadata, missing-probe rejection and observed CTest gate controls. Each unit/schema/consumer/interop failure sentinel returned nonzero; the passing control succeeded. These local controls do not establish a hosted job conclusion.
+| Configuration | Result | Actual compiler / standard library |
+|---|---|---|
+| Windows Server 2022, VS toolset 14.44, SDK 10.0.26100.0 | 118/118 | MSVC 19.44.35229.0; STL 143/update 202503 |
+| Linux functional, pinned GCC container | 117/117 | GCC 14.4.0; libstdc++ 20260626 |
+| Linux ASan+UBSan, separate build | 117/117 | GCC 14.4.0; runtime probe, instrumented build and tests passed |
+| Linux TSan, separate build | 117/117 | GCC 14.4.0; runtime probe, instrumented build and tests passed |
 
-The sanitizer module fails configuration when a requested runtime cannot execute. ASan+UBSan and TSan use separate configurations. TSan's ASLR workaround is scoped to child commands in its CI container; no host sysctl is modified. CI retains allowlisted logs and environment evidence on failure.
+Each Linux row ran 77 unit, 26 schema, 3 consumer, 7 raw-process and 4 official-client/verifier cases inside the same pinned container. Nested downstream consumer builds verify functional integration; they do not inherit sanitizer instrumentation. The SDK/unit/process targets are instrumented in sanitizer rows. No sanitizer was skipped or reported successful without execution.
 
-## Remaining gate
+The container is `gcc:14.4.0@sha256:435c3cbc2ad1c25fbc1684c367808ff0ca2035a1bed56734a40165ab5cd7e3bd`. Node 24.22.1, official client 2.4.0 and Inspector 2.12.0 remain exact pins. All rows recorded clean tracked worktrees. Actions runner 2.338.0 setup logs identify Ubuntu 24.04 image 20261025.353.1 and Windows 2022 image 20261025.346.1. The Windows exported ImageVersion separately reports 20261026.347.1; raw evidence preserves both provider fields rather than asserting they are identical.
 
-No hosted matrix or sanitizer run has occurred. Docker remains stopped. Remote verification needs authorization to publish the feature branch; no master update, merge or release is part of that publication. Once authorized:
+## Failure propagation
 
-1. Publish codex/product-protocol-foundation so its codex/** push triggers the workflow.
-2. Record actual functional Windows/Linux and sanitizer outcomes, toolchain/runner versions, run URLs and artifacts. A skipped or unavailable sanitizer is not success.
-3. Where GitHub permits manual dispatch on that workflow/ref, run unit/schema/consumer/interop failure_probe controls and require failed hosted conclusions, then a normal none run that passes.
-4. Resolve genuine failures and rereview corrections before checking T19 GREEN. Do not change master merely to enable dispatch.
+Four hosted controls at the same source revision each failed with exactly one deliberate sentinel while the real cases passed:
 
-Local implementation details and commands: ignored build/execution/T19-report.md, T19-preparation.md and T19-review.md. T20-T21 are deferred at the user's request. README is unchanged.
+| Family | Hosted failed run | Observed result |
+|---|---|---|
+| Unit | [40863144391](https://github.com/ptai-eng/synapse-mcp/actions/runs/40863144391) | 77 real cases pass; unit sentinel fails |
+| Schema | [40863149665](https://github.com/ptai-eng/synapse-mcp/actions/runs/40863149665) | 26 real cases pass; schema sentinel fails |
+| Consumer | [40863154296](https://github.com/ptai-eng/synapse-mcp/actions/runs/40863154296) | 3 real cases pass; consumer sentinel fails |
+| Interop | [40863160483](https://github.com/ptai-eng/synapse-mcp/actions/runs/40863160483) | 4 real cases pass; interop sentinel fails |
+
+Fault injection changes only disposable generated CTest metadata. The successful main run and isolated negative controls use the same immutable source SHA; these failures did not modify source or the successful matrix's build trees.
+
+## Corrections and evidence
+
+The first hosted Linux attempt exposed Git's checkout-ownership guard in the container. A reviewed correction trusts only the explicit GitHub workspace inside that ephemeral container. The initial setup-failed controls are excluded from failure-propagation evidence. The corrected matrix and controls above establish T19; local-only checks are not substituted for them.
+
+The workflow triggers master/codex/** pushes, master pull requests and manual dispatch, with full action SHA pins and read-only token permissions. It retains allowlisted logs, environment metadata and transcripts even on failure. TSan uses a child-scoped ASLR workaround in its CI container; no user-machine Docker or host sysctl change was needed.
+
+Ignored local primary evidence: `build/execution/T19-hosted-evidence.md`, `T19-hosted-review.md`, `T19-matrix-status.json`, downloaded `ci-1fa-*` / `ci-probe-*` artifacts and `T19-1fa-*.log`. Source reviews are `T19-review.md` and `T19-safe-directory-review.md`. Implementation commits: `53190c8` and `1fa654b`.
+
+The user authorized the feature-branch publication and verification runs. Master was not merged and no release was created. T20 is the next named-host gate; T21/README remains deferred.

@@ -188,3 +188,19 @@ Ruling: Exercise application-worker ownership through a minimal typed static res
 
 - User requested status and stopping around T18-T19 because usage is nearly exhausted. T18 is complete, reviewed and committed as1aa2ecc. T19 implementation/local checks are ready, but its independent reviewer hit the account usage limit before returning a verdict. Therefore T19 review and hosted CI/sanitizer/failed-job evidence remain pending; T19 is NOT complete.
 - Preserve the uncommitted T19 changes in .github/workflows/ci.yml and new cmake/RecordEnvironment.cmake / Sanitizers.cmake. Resume from build/execution/T19-report.md and T19-review.diff; obtain a fresh independent source review before any publication request. No push/dispatch occurred. T20-T21 remain deferred.
+
+### T19 resumed after usage reset
+
+- User reset usage and authorized continuing to T20 after T19 is complete and sound. T21/README remain deferred.
+- T19 independent source review completed: implementation APPROVE, no actionable P1/P2 findings; actual hosted qualification remains pending. Minor limits: nested downstream consumer builds are functional-only rather than sanitizer-instrumented, and mutable runner utilities are version-recorded rather than fully image-attested.
+- Reviewed implementation committed as `53190c8`. Remote branch does not yet exist. Requested explicit authorization to publish only codex/product-protocol-foundation and run verification Actions; no merge/master update/release is included. No remote mutation has occurred before authorization.
+
+### Authorized hosted CI execution
+
+- User explicitly authorized publishing codex/product-protocol-foundation and running verification Actions, without master merge or release. Pushed53190c8; mainrun40861978959. First dispatch controls40862013388(unit),40862057941(schema),40862064858(consumer),40862070566(interop) all failed during setup, so are NOT test-gate evidence.
+- Actual Linux none/ASanUBSan/TSan runtime probes succeeded but configure failed when Git rejected container checkout ownership. Scoped exact-workspace Git trust correction reviewed APPROVE and pushed as1fa654b. New full matrix is triggered; actual results remain pending. No Docker startup on the user's machine and no host-global Git trust change.
+- Corrected matrix run40862549576 at1fa654b passed Linux configure/runtime probes and reached functional tests. Re-dispatched intentional-failure controls at this corrected SHA:40863144391(unit),40863149665(schema),40863154296(consumer),40863160483(interop); conclusions must be checked against actual failing sentinel logs before credit.
+- Initial Windows2022 job123407239864 in run40861978959 passed118/118 with MSVC19.44.35229.0, STL143/update202503, SDK10.0.26100.0, image20261026.347.1. This is a partial platform success, not a passed overall matrix.
+- Hosted qualification review PASS at1fa654b: main40862549576 all4rows success (Windows118/118; Linux functional/ASanUBSan/TSan each117/117), four corrected dispatch controls fail exactlyone intendedsentinel with realcasespassing. Actualrecords/review retained in build/execution/T19-hosted-evidence.md and T19-hosted-review.md. [T19 checkpoint](checkpoint-t19.md) records exact versions/runlinks.
+- Ruling: use the successful clean matrix and isolated negative-control runs at the same immutable source SHA as the complete gate evidence; do not repeat an identical full matrix merely to reorder completion timestamps. Fault injection modifies only disposable CTest build metadata. Cost if wrong: an additional unchanged workflow run, no source correction.
+- T19 complete; user authorized proceeding to T20 after this gate. T20 generator/read-only host config implementation is active. T21/README remain deferred, and no master merge or release is included in existing authorization.
