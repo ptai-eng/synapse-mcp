@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T20 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T19 hosted qualification is recorded in [checkpoint-t19.md](checkpoint-t19.md); T20 named-host evidence is recorded in [checkpoint-t20.md](checkpoint-t20.md); the authorized non-README T21 slice is complete ([checkpoint](checkpoint-t21.md)). README edits and full M1 qualification remain pending. Do not mark a task complete from document review alone.
+Status: T01-T20 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T19 hosted qualification is recorded in [checkpoint-t19.md](checkpoint-t19.md); T20 named-host evidence is recorded in [checkpoint-t20.md](checkpoint-t20.md); the authorized non-README T21 slice is complete ([checkpoint](checkpoint-t21.md)). The user reaffirmed README deferral; the authorized T01-T21 foundation scope is complete ([final handoff](checkpoint-m1-foundation.md)). README/AC-08 and release publication remain outside this completed scope. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -212,7 +212,16 @@ Depends: T19. Files (2): `tests/interop/inspector-config.mjs`, `docs/verificatio
 
 User scope update (2026-10-29): complete the four non-README documents now. README.md remains unchanged until the user authorizes it after revisiting T20. Do not mark all T21 or M1 acceptance complete from this partial slice.
 
-Authorized slice complete: [checkpoint-t21.md](checkpoint-t21.md). Migration, third-party notices, verification evidence and spec status passed focused reproduction and independent review. The original full-task checklist below remains pending because it includes README and named-host acceptance.
+Authorized slice complete: [checkpoint-t21.md](checkpoint-t21.md). Migration, third-party notices, verification evidence and spec status passed focused reproduction and independent review. T20 named-host acceptance is now complete. The original full-task checklist below retains the deferred README requirements; it is not the current user-authorized scope.
+
+Current authorized slice (README excluded):
+
+- [x] Migration/API/lifetime/shutdown guidance documented and reviewed.
+- [x] Dependency versions, schema corrections and licensing notices documented and reviewed.
+- [x] Verification record includes qualified CI and actual named-host transcript.
+- [x] Specification and task status distinguish implemented foundation from deferred README acceptance.
+
+Original full-task requirements, including deferred README:
 
 Depends: T20 and all checkpoint evidence. Files (5): `README.md`, `docs/migration/v0.2-to-m1.md`, `docs/third-party.md`, `docs/verification/m1.md`, `specs/001-native-stdio-foundation/spec.md`.
 

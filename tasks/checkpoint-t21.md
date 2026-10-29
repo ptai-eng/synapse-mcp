@@ -1,6 +1,6 @@
 # T21 supporting-documentation checkpoint
 
-Date: 2026-10-29. Status: the user-authorized non-README slice is complete and independently approved. Full T21 and M1 acceptance remain incomplete.
+Date: 2026-10-29. Status: the user-authorized non-README slice is complete and independently approved. The latest user scope excludes README; all authorized T21 supporting-documentation work is complete. Full original M1 acceptance still includes deferred README/AC-08.
 
 ## Delivered scope
 
@@ -21,4 +21,4 @@ README SHA-256 before and after is `2E2CA4B0F092C51C9AD503988617A0D6F062DBCC0B35
 
 ## Remaining gates
 
-T20 and AC-06 require an actual named-host walkthrough and transcript; the user deferred this work. README edits and AC-08 remain deferred until the user authorizes them. This checkpoint completes only the supporting-documentation slice and makes no release, publication or universal host-compatibility claim. The prepared T20 generator and user analysis directory remain outside this commit scope.
+T20 and AC-06 subsequently passed the actual user-operated named-host walkthrough and transcript review; see [T20](checkpoint-t20.md). The user reaffirmed README deferral after a separate draft was prepared and reproduced. That draft and its logs remain ignored under build/execution; README is restored to its committed content. README/AC-08 remains deferred. This checkpoint completes only the supporting-documentation slice and makes no release, publication or universal host-compatibility claim. The prepared T20 generator and user analysis directory remain outside this commit scope.
