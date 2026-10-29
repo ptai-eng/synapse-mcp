@@ -46,6 +46,9 @@ jobs:
       - name: Provision build tools inside the pinned container
         run: |
           set -euo pipefail
+          # Checkout's temporary HOME does not persist into container shell steps.
+          # Trust only this ephemeral job's checkout for provenance/runtime Git.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           apt-get update
           apt-get install --yes --no-install-recommends cmake ninja-build ca-certificates util-linux
           test "$(g++ -dumpfullversion)" = '14.4.0'
