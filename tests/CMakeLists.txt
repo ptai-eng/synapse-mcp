@@ -98,6 +98,14 @@ catch_discover_tests(synapse_native_status_tests TEST_PREFIX "synapse." PROPERTI
 
 if(SYNAPSE_MCP_BUILD_INTEROP_TESTS)
     include("${PROJECT_SOURCE_DIR}/cmake/InteropTools.cmake")
+    add_executable(synapse_process_server fixtures/process_server.cpp)
+    target_link_libraries(synapse_process_server PRIVATE synapse::mcp)
+    foreach(_process_group IN ITEMS recover idle cooperative stop blocked cleanup gated)
+        add_test(NAME synapse.M1.process.${_process_group}
+            COMMAND "${SYNAPSE_INTEROP_NODE}" "${PROJECT_SOURCE_DIR}/tests/interop/process.test.mjs"
+                "$<TARGET_FILE:synapse_process_server>" "$<TARGET_FILE:native_status>" "${_process_group}")
+        set_tests_properties(synapse.M1.process.${_process_group} PROPERTIES TIMEOUT 30)
+    endforeach()
     add_test(NAME synapse.M1.interop.client
         COMMAND "${SYNAPSE_INTEROP_NODE}" "${PROJECT_SOURCE_DIR}/tests/interop/run-client.mjs"
             "$<TARGET_FILE:native_status>" "${SYNAPSE_INTEROP_COMPILER}"
