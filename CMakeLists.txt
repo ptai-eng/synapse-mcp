@@ -50,8 +50,12 @@ if(SYNAPSE_MCP_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
+option(SYNAPSE_MCP_BUILD_INTEROP_TESTS "Build official client interoperability tests" OFF)
 # Tests
 option(SYNAPSE_MCP_BUILD_TESTS "Build Synapse MCP tests" "${_synapse_top_level}")
+if(SYNAPSE_MCP_BUILD_INTEROP_TESTS AND NOT SYNAPSE_MCP_BUILD_TESTS)
+    message(FATAL_ERROR "Interop tests require SYNAPSE_MCP_BUILD_TESTS=ON")
+endif()
 if(SYNAPSE_MCP_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

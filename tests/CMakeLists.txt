@@ -95,3 +95,20 @@ catch_discover_tests(synapse_prompt_tests TEST_PREFIX "synapse." PROPERTIES TIME
 add_executable(synapse_native_status_tests native_status.cpp)
 target_link_libraries(synapse_native_status_tests PRIVATE synapse::mcp Catch2::Catch2WithMain)
 catch_discover_tests(synapse_native_status_tests TEST_PREFIX "synapse." PROPERTIES TIMEOUT 10)
+
+if(SYNAPSE_MCP_BUILD_INTEROP_TESTS)
+    include("${PROJECT_SOURCE_DIR}/cmake/InteropTools.cmake")
+    add_test(NAME synapse.M1.interop.client
+        COMMAND "${SYNAPSE_INTEROP_NODE}" "${PROJECT_SOURCE_DIR}/tests/interop/run-client.mjs"
+            "$<TARGET_FILE:native_status>" "${SYNAPSE_INTEROP_COMPILER}"
+            "$<TARGET_FILE:synapse_interop_environment>" "${PROJECT_SOURCE_DIR}"
+            "${PROJECT_BINARY_DIR}/evidence/interop-client.json" "${GIT_EXECUTABLE}")
+    set_tests_properties(synapse.M1.interop.client PROPERTIES TIMEOUT 30)
+    foreach(_group IN ITEMS evidence provenance cleanup)
+        add_test(NAME synapse.M1.interop.${_group}
+            COMMAND "${SYNAPSE_INTEROP_NODE}" "${PROJECT_SOURCE_DIR}/tests/interop/harness.test.mjs"
+                "$<TARGET_FILE:native_status>" "${SYNAPSE_INTEROP_COMPILER}"
+                "$<TARGET_FILE:synapse_interop_environment>" "${PROJECT_SOURCE_DIR}" "${GIT_EXECUTABLE}" "${_group}")
+        set_tests_properties(synapse.M1.interop.${_group} PROPERTIES TIMEOUT 30)
+    endforeach()
+endif()
