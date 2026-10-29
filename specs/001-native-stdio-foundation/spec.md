@@ -1,11 +1,11 @@
 # Specification 001: A dependable native stdio integration
 
-- Status: Accepted scope; implementation not started
+- Status: Runtime T01-T19 implemented and reviewed; M1 acceptance incomplete (AC-06 host and AC-08 README pending)
 - Created: 2026-10-25
 - Milestone: M1, the first verified native stdio server integration
 - Decision: [ADR-001](../../docs/decisions/0001-product-and-protocol.md)
 - Principles: [Constitution](../../.specify/memory/constitution.md)
-- Execution: [implementation plan](../../tasks/plan.md) and [TDD task checklist](../../tasks/todo.md); runtime work remains pending
+- Execution: [implementation plan](../../tasks/plan.md) and [TDD task checklist](../../tasks/todo.md); current acceptance evidence is in the [verification record](../../docs/verification/m1.md)
 
 ## Objective and primary user
 
@@ -29,7 +29,7 @@ An independent client launches the executable, negotiates `2025-11-25`, discover
 
 ## Selected protocol profile
 
-The normative target is **MCP `2025-11-25`**. This is a dated profile, not a claim to implement every optional MCP feature. All target rows below are **planned** until the release gates pass. Use the selected revision's specifications when implementing each row.
+The normative target is **MCP `2025-11-25`**. This is a dated profile, not a claim to implement every optional MCP feature. T01-T19 implement and test the rows below on the declared CI toolchains. Full milestone acceptance still requires the named-host walkthrough and README reproduction; see the [verification record](../../docs/verification/m1.md).
 
 | Area | M1 scope | Explicit limit |
 |---|---|---|
@@ -41,17 +41,17 @@ The normative target is **MCP `2025-11-25`**. This is a dated profile, not a cla
 | Prompts | When registered: list/get with validated arguments and text message content | No completion or untested multimodal content |
 | Other capabilities | Only capabilities exercised by the supported profile are advertised | Sampling, roots, elicitation, protocol logging and extensions are outside M1 |
 
-Tool inputs must be checked against the declared contract before domain operations execute. Require JSON Schema 2020-12 support, honor an explicitly declared dialect, and use 2020-12 when none is declared. Handle unsupported dialects with a clear error rather than executing unvalidated input. The implementation plan must select the validation mechanism before changing tool execution; this decision step does not select a validator dependency or establish implemented support. Any unmet normative requirement is a release blocker, rather than something hidden by a feature-profile label. [Selected base protocol](https://modelcontextprotocol.io/specification/2025-11-25/basic/index).
+Tool inputs must be checked against the declared contract before domain operations execute. Require JSON Schema 2020-12 support, honor an explicitly declared dialect, and use 2020-12 when none is declared. Handle unsupported dialects with a clear error rather than executing unvalidated input. The implementation uses pinned, corrected jsoncons with SRELL under [ADR-003](../../docs/decisions/0003-schema-validation.md) and [ADR-004](../../docs/decisions/0004-schema-qualification-corrections.md). The mandatory draft2020-12 suite passes on the declared CI platforms; optional format assertions remain outside the default profile. Any unmet normative requirement is a release blocker, rather than something hidden by a feature-profile label. [Selected base protocol](https://modelcontextprotocol.io/specification/2025-11-25/basic/index).
 
 Handle parse/envelope/unknown-method failures, malformed call parameters and unknown tools as protocol errors. For example, a string where `arguments` must be an object is a malformed call; an arguments object violating the tool's declared schema or domain rules is a tool execution failure and returns `isError: true`. Apply the same execution-error channel to application failures. Unknown notifications receive no response. Keep errors attributable to the protocol, transport or application boundary.
 
-The selected tools specification also requires access controls, invocation rate limits and output sanitization. The implementation plan must define and test appropriate local policies; stdio and the absence of OAuth do not waive these requirements. [Tool security requirements](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#security-considerations).
+The selected tools specification also requires access controls, invocation rate limits and output sanitization. The implementation tests per-server admission/rate policy and UTF-8/control/encoded-size output checks; [migration guidance](../../docs/migration/v0.2-to-m1.md#set-local-policy) explains defaults and application redaction hooks. Stdio and the absence of OAuth do not waive these requirements. [Tool security requirements](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#security-considerations).
 
 References: [Lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle), [Transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports), [Tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools), [Resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources), [Prompts](https://modelcontextprotocol.io/specification/2025-11-25/server/prompts), [Ping](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping).
 
 ## Ownership and execution constraints
 
-Registration completes before serving; runtime registry mutation is outside the first supported profile. Define the callback execution context and the application's responsibility for domain-state access in the implementation plan. Do not infer application thread safety from an SDK mutex.
+Registration completes before serving; runtime registry mutation is outside the first supported profile. Handlers and custom policy hooks execute on one owned application worker. Applications synchronize domain-state access from other threads and keep captured state and borrowed transport alive through the owner-thread server destructor/join. Do not infer application thread safety from an SDK mutex.
 
 SDK-owned I/O and work must have deterministic owners. Stop accepting work before draining/cancelling queued work and releasing callback state. Active callbacks cooperate with cancellation or return normally; the SDK cannot safely force arbitrary application code to stop. Tests must distinguish blocked transport I/O from non-cooperative callbacks.
 
@@ -74,15 +74,9 @@ For AC-06, use the official TypeScript client in legacy mode with its supported 
 
 ## Commands and current verification baseline
 
-Run from the repository root with the intended compiler environment configured:
+The [verification record](../../docs/verification/m1.md) provides reproduced clean-checkout/reference/consumer commands, exact hosted toolchains, source attribution and CI links. [Migration guidance](../../docs/migration/v0.2-to-m1.md) documents the typed text-only handlers, removed reverse server requests, lifetime and cooperative shutdown.
 
-```sh
-cmake -S . -B build -DSYNAPSE_MCP_BUILD_EXAMPLES=ON -DSYNAPSE_MCP_BUILD_TESTS=ON
-cmake --build build --config Debug --parallel 4
-ctest --test-dir build -C Debug --output-on-failure
-```
-
-These commands describe the existing build/test entry points. At assessed commit `22c2126`, an existing Windows MinGW build and three serialization cases with 18 assertions passed. They do not satisfy the new acceptance criteria or establish current host compatibility. The next implementation plan must add the independent-client and clean-consumer commands before calling M1 verified.
+At source `1fa654be73d582e9ae4778da0d757e9112a6bac1`, all four hosted jobs pass: Windows 118/118; Linux functional, separate ASan+UBSan and TSan each 117/117. Four intentional hosted negative controls verify unit/schema/consumer/interop gate failures. These results satisfy the recorded runtime/CI scope, not the missing named-host and README acceptance gates. The assessed `22c2126` baseline contained only three serialization cases and remains historical evidence.
 
 ## Project structure and code conventions
 
@@ -97,14 +91,7 @@ specs/001-native-stdio-foundation/  This milestone's scope and acceptance
 .understand-anything/         Local analysis artifacts, outside product commits
 ```
 
-Preserve the `synapse` namespace and existing snake_case conventions while the API is refined. Use concrete error payloads rather than an error-code enum where context is needed. For example, the existing callback convention is:
-
-```cpp
-using tool_callback = std::function<
-    std::expected<nlohmann::json, error>(const nlohmann::json&)>;
-```
-
-This documents the present naming/error style; it does not freeze the v0.2 callback signature or settle the new result API. Keep protocol conversion and transport details separate from application handlers.
+Preserve the `synapse` namespace and snake_case naming. Public handlers use typed text results and `std::expected<result, handler_error>`, with `request_context` carrying the ID and stop token. Keep `sdk_error` (local SDK failures), wire `error` (RPC failures) and `handler_error` (application failures) distinct. The old v0.2 nested callback aliases no longer define the server API. See [handlers.hpp](../../include/synapse/handlers.hpp) and the [migration guide](../../docs/migration/v0.2-to-m1.md).
 
 ## Testing strategy
 
@@ -118,4 +105,4 @@ Use Catch2 for public-boundary behavior and protocol fixtures. Add subprocess te
 
 M1 excludes a general agent framework, model hosting, cloud deployment, HTTP/OAuth, universal GUI integration, C++20 fallback, dual-era support and performance superiority claims.
 
-The next step is an implementation plan and behavior-driven task list for M1. That plan must settle execution/cancellation, schema validation, local access/rate/output policies, exact test toolchains and harness package versions before code changes. This step accepts the product and protocol decisions only; it does not mark those implementation choices or acceptance tests complete.
+T01-T19 implementation and reviewed CI evidence now exist. T20's Inspector Web 2.12.0 walkthrough/transcript remains deferred after local browser access failed. T21's supporting documentation has a reproduced Windows reference/consumer flow; the user explicitly deferred README edits and its acceptance check. Keep the milestone incomplete until AC-06 and AC-08 have their required evidence. No release publication or universal host compatibility follows from this update.
