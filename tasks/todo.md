@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T16 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md) and [execution.md](execution.md) for local verification and decisions. T17-T21 remain pending. Do not mark a task complete from document review alone.
+Status: T01-T17 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T18-T21 remain pending. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -172,11 +172,11 @@ Depends: T15. Files (4): `tests/interop/package.json`, `tests/interop/package-lo
 
 Depends: T16. Files (4): `tests/interop/run-client.mjs`, `cmake/InteropTools.cmake`, `CMakeLists.txt`, `tests/CMakeLists.txt`.
 
-- [ ] RED: the harness asserts the actual initialize revision, initialized notification, tool/resource/prompt flow and evidence metadata. A wrong revision/failed operation/missing binary returns nonzero.
-- [ ] Run the harness against a controlled wrong-revision fixture before the reference server; record failure without treating transport close as graceful-exit proof.
-- [ ] Implement transport recording with the tagged SDK API, 5s request/15s overall limits and scoped cleanup. Add opt-in `SYNAPSE_MCP_BUILD_INTEROP_TESTS`; configure must fail if requested prerequisites are missing. CTest uses absolute generator-resolved server paths and a 30s outer timeout.
-- [ ] GREEN: `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.interop\.'`; evidence identifies versions, OS/compiler/stdlib, source commit and transcript.
-- [ ] Review and commit `test: verify exact revision interoperability`.
+- [x] RED: the harness asserts the actual initialize revision, initialized notification, tool/resource/prompt flow and evidence metadata. A wrong revision/failed operation/missing binary returns nonzero.
+- [x] Run the harness against a controlled wrong-revision fixture before the reference server; record failure without treating transport close as graceful-exit proof.
+- [x] Implement transport recording with the tagged SDK API, 5s request/15s overall limits and scoped cleanup. Add opt-in `SYNAPSE_MCP_BUILD_INTEROP_TESTS`; configure must fail if requested prerequisites are missing. CTest uses absolute generator-resolved server paths and a 30s outer timeout.
+- [x] GREEN: `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.interop\.'`; evidence identifies versions, OS/compiler/stdlib, source commit and transcript.
+- [x] Review and commit `test: verify exact revision interoperability`.
 
 ## T18: Prove shutdown with raw child processes
 

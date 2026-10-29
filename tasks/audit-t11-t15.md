@@ -25,4 +25,4 @@ Detailed local evidence is under ignored `build/execution/`: `T11-T15-audit-revi
 
 ## Scope
 
-The review covered tool registration/schema/result errors, authorization/quota/output policy, resource and prompt contracts, combined output frame handling, cancellation and callback lifetime, and native reference state. This does not establish named-host, CI or full M1 qualification. T17's separate harness review remains open; its changes are preserved outside this audit's source scope. README remains T21.
+The review covered tool registration/schema/result errors, authorization/quota/output policy, resource and prompt contracts, combined output frame handling, cancellation and callback lifetime, and native reference state. This does not establish named-host, CI or full M1 qualification. The separate [T17 checkpoint](checkpoint-t17.md) records the subsequently completed official-client verification. README remains T21.
