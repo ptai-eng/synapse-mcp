@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T15 are complete and reviewed; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md) and [execution.md](execution.md) for local verification and decisions. T16-T21 remain pending. Do not mark a task complete from document review alone.
+Status: T01-T16 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md) and [execution.md](execution.md) for local verification and decisions. T17-T21 remain pending. Do not mark a task complete from document review alone.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -162,11 +162,11 @@ Depends: T12-T14. Files (5): `examples/native_status_state.hpp`, `examples/nativ
 
 Depends: T15. Files (4): `tests/interop/package.json`, `tests/interop/package-lock.json`, `tests/interop/.node-version`, `.gitignore`.
 
-- [ ] RED: assert the planned package manifest/lock pins client 2.4.0 and Inspector 2.12.0 and the local runtime is exactly Node 24.22.1; record missing/mismatched tools.
-- [ ] Provision a checksum-verified official Node archive under ignored `build/tools/` if needed; use its PATH only for task commands, not a global replacement.
-- [ ] Create a dev-only ESM package, exact dependencies and lockfile using `npm --prefix tests/interop install --package-lock-only --ignore-scripts`; ignore only generated node_modules, not the lockfile.
-- [ ] GREEN: `npm --prefix tests/interop ci --ignore-scripts`, package/Node version checks and imports from `@modelcontextprotocol/client` and `/stdio`.
-- [ ] Review and commit `test: pin independent verifier tools`.
+- [x] RED: assert the planned package manifest/lock pins client 2.4.0 and Inspector 2.12.0 and the local runtime is exactly Node 24.22.1; record missing/mismatched tools.
+- [x] Provision a checksum-verified official Node archive under ignored `build/tools/` if needed; use its PATH only for task commands, not a global replacement.
+- [x] Create a dev-only ESM package, exact dependencies and lockfile using `npm --prefix tests/interop install --package-lock-only --ignore-scripts`; ignore only generated node_modules, not the lockfile.
+- [x] GREEN: `npm --prefix tests/interop ci --ignore-scripts`, package/Node version checks and imports from `@modelcontextprotocol/client` and `/stdio`.
+- [x] Review and commit `test: pin independent verifier tools`.
 
 ## T17: Verify the official-client flow
 

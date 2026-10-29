@@ -1,6 +1,6 @@
 # T13-T15 methods and native reference checkpoint
 
-Date: 2026-10-28. Branch: `codex/product-protocol-foundation`. All commits remain local.
+Date: 2026-10-28. Branch: `codex/product-protocol-foundation`. All commits remain local. The subsequent [thorough audit](audit-t11-t15.md) records additional corrections and final verification on 2026-10-29.
 
 T13 completes static text resources, T14 adds static text prompts, and T15 adds a native application demonstrating a shared real state. Independent scoped reviews approved their source and quality. This checkpoint does not claim official-client, named-host or CI interoperability; those are T16-T20. README work remains T21.
 

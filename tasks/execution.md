@@ -141,3 +141,24 @@ Ruling: Exercise application-worker ownership through a minimal typed static res
 - T14 reviewed and committed as `24f90e0`: MSVC prompt/resource/policy/lifecycle/ownership selection 25/25, prompt case 38 assertions. Review approves spec and quality.
 - T15 source reviewed and committed as `39f8e86`; fake-clock case passed 14 assertions, Windows native stdio smoke passed. Full aggregate gates are running. Fixture ID correction committed separately as `e8b7dd5`.
 - T13-T15 final verification: Windows/MSVC unfiltered CTest 104/104 and Ubuntu WSL/GCC 103/103; fresh downstream consumers and both real-process stdio probes passed on each platform. The mandatory official schema gate is included. All three task reviews approve source/spec and quality. See [T15 checkpoint](checkpoint-t15.md). T16-T21 and README remain pending.
+
+## Resumed: T16-T17, 2026-10-28
+
+- User authorized T16-T17 and a report; T18-T21 and README remain deferred.
+- T16 RED found missing manifest, lock and runtime pin and global Node 24.15.0. Local Node 24.22.1 archive SHA-256 was independently matched to the Node release checksum over HTTPS. Exact client 2.4.0 and Inspector 2.12.0 installed via npm ci --ignore-scripts; both public client imports succeeded. Independent review approved spec and quality. Commit `d99b0ec`; evidence `build/execution/T16-report.md` and `T16-review.md`.
+- T17 implementation in progress; exact negotiated revision, initialized notification, independent official client flow and negative controls remain execution gates.
+
+## T11-T15 thorough audit, 2026-10-28
+
+- User asked whether T11-T15 were complete and requested a thorough recheck. Prior task completion is historical; this audit includes full Windows/Ubuntu runs, cross-feature review and scoped repair before a renewed approval.
+- Initial Windows baseline passed104/104 plus fresh consumer and raw stdio/native-state probes. Ubuntu baseline is still finishing dependency fixtures; runtime/schema/reference and consumer groups passed.
+- Independent review found A1: direct control/pre-ready/queue-full emissions bypass the declared encoded-frame cap; A2: an oversized result from an already-cancelled operation can stop the whole session before the cancellation check; A3: resource URI syntax was not validated according to the selected MCP profile. These are open audit findings, not waived by the prior green tests.
+- Ruling: extend the scoped audit repair to URI syntax checks and tests/resources.cpp alongside server.hpp/policy regressions, because the selected resource specification requires all resource URIs be validated. No resolver or filesystem/network access is introduced. Cost if wrong: bounded parser/refactoring work and additional URI compatibility testing.
+- T17 remains uncommitted and awaiting its four independent-review corrections; no T17 approval is claimed. Its partial source changes are preserved while the requested T11-T15 audit takes priority.
+- Audit fix round1: A1/A2/A3 addressed; standalone policy/resource9cases288assertions passed. Scoped rereview found two new P2s in the fix: gated fixture destruction order and initialize-success fallback leaving handshake state active.
+- Audit fix round2: both P2s addressed; initialize RED reproduced2failed assertions, then16policy/resource/lifecycle cases418assertions passed. The URI syntax correction also required the old unknown-resource fixture to use app://missing instead of a malformed relative string, preserving the original -32002 assertion. Scoped rereview approves spec and quality without open findings. Source/tests saved in `682e4a9`.
+- Fix1 full aggregates ran106/107 Windows and105/106 Ubuntu; the sole failure was the now-corrected old URI fixture. Final fix2 all-target builds, unfiltered suites, raw probes and10x focused repeats are still running; these intermediate results are not reported as final GREEN.
+
+### Audit completion, 2026-10-29
+
+- Final fix2 Windows unfiltered CTest 107/107 and Ubuntu WSL 106/106 passed; fresh downstream consumers and both actual-process stdio probes passed on each platform. The same 30 lifecycle/ownership/tool/policy/resource/prompt/reference cases each passed 10 consecutive executions on each platform (300 per platform). Schema official gate remains included. Source `682e4a9`, scoped review clean; [audit report](audit-t11-t15.md). T17 remains a separate active task.
