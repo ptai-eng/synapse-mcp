@@ -1,41 +1,65 @@
-# Synapse MCP
+<h1 align="center">Synapse MCP</h1>
 
-Expose native application state and operations to an MCP host from C++23. Synapse provides a **header-only server core** for local, host-launched **stdio** integrations targeting MCP **2025-11-25**.
+<p align="center">
+  <strong>Bring native application state to an MCP host.</strong><br>
+  A header-only C++23 server core for local stdio integrations.
+</p>
 
-The source on `master` prepares **v0.3.0**, the M1 native stdio foundation. This is a pre-1.0 SDK with breaking server API changes from v0.2; review the [migration guide](docs/migration/v0.2-to-m1.md) and [release notes](docs/releases/v0.3.0.md) before upgrading. Integration uses CMake source-tree embedding; no installed `find_package` export or package-manager distribution is provided.
+<p align="center">
+  <a href="https://github.com/ptai-eng/synapse-mcp/releases/tag/v0.3.0"><img src="https://img.shields.io/badge/release-v0.3.0-475569?style=flat-square" alt="Release v0.3.0"></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/C%2B%2B-23-2f6f8f?style=flat-square" alt="C++23"></a>
+  <a href="#verified-scope-and-limits"><img src="https://img.shields.io/badge/MCP-2025--11--25-475569?style=flat-square" alt="MCP 2025-11-25"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-475569?style=flat-square" alt="MIT license"></a>
+</p>
 
-The reproducible Quick Start below pins the previously qualified runtime commit `1fa654b`, which reports `0.2.0`. It reproduces the historical acceptance evidence. Release-specific verification and publication status are tracked in the release notes.
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#embed-in-your-application">Embedding</a> ·
+  <a href="#runtime-architecture">Architecture</a> ·
+  <a href="#verified-scope-and-limits">Verification</a> ·
+  <a href="#security-scan-and-reviewed-warnings">Security</a>
+</p>
 
-To evaluate the v0.3.0 candidate from a fresh clone, replace the detached-checkout command below with `git -C "Synapse checkout" checkout master` and record `git -C "Synapse checkout" rev-parse HEAD` with your results. Once published, use `checkout --detach v0.3.0` for an immutable release checkout. The build and embedding commands are otherwise the same; historical evidence remains tied to its recorded commit.
+---
 
-## Runtime architecture
+Expose **tools, resources and prompts** from your C++ application over host-launched stdio. Synapse handles JSON-RPC framing, protocol validation and owned application work; your application supplies state, operations and domain permissions.
 
-A host launches the application and exchanges UTF-8 newline-delimited JSON-RPC over stdin/stdout. Native transport code frames input and bounds buffered output; the server validates envelopes and initialization state before dispatch. Registered application handlers and policy hooks execute on one owned worker. The server owns that work but borrows the transport and application state.
+**[v0.3.0 is released](https://github.com/ptai-eng/synapse-mcp/releases/tag/v0.3.0).** The M1 foundation targets MCP `2025-11-25`, with text-only results and a source-tree CMake integration. There is no installed `find_package` export or package-manager distribution.
 
-| Boundary | Contract | Implementation |
-|---|---|---|
-| Transport | Bounded frames; interruptible SDK-owned I/O on Windows pipes and POSIX streams | [Transport](include/synapse/transport.hpp) |
-| Protocol and lifecycle | MCP `2025-11-25`; register before start; typed errors; explicit stop/join | [Server](include/synapse/server.hpp) |
-| Application execution | One owned worker; bounded queue; cooperative cancellation | [Executor](include/synapse/detail/owned_executor.hpp) |
-| Tool inputs | Compile schemas at registration; validate arguments before callbacks | [Schema adapter](include/synapse/detail/schema_validator.hpp) |
-| Local policy | Queue/rate limits, authorization hooks and output checks; application supplies domain rules | [Options](include/synapse/server_options.hpp) |
+> [!IMPORTANT]
+> This is a pre-1.0 SDK with breaking server API changes from v0.2. Read the [migration guide](docs/migration/v0.2-to-m1.md) before upgrading. See [release notes](docs/releases/v0.3.0.md) for changes and verification evidence.
 
-These boundaries support embedding in an existing native application. Applications must synchronize their own shared state; non-cooperative callbacks can delay shutdown. See the lifecycle requirements in the embedding example below.
-
-## Quick Start: build the native reference
+## Quick Start
 
 You need Git, CMake 3.20+ and a C++23 compiler/standard library with `std::expected`. CMake uses checked-in nlohmann/json 3.11.3 and fetches pinned jsoncons/SRELL sources with the qualified schema correction. The first uncached configure needs network access. Tests also fetch pinned Catch2 and schema fixtures. See [dependency versions, correction and notices](docs/third-party.md).
 
-**Windows PowerShell**, with Visual Studio 2022 C++ tools v143 14.44 and Windows SDK 10.0.26100.0 installed:
+### Windows (PowerShell)
+
+With Visual Studio 2022 C++ tools v143 14.44 and Windows SDK 10.0.26100.0 installed:
 
 ```powershell
 git clone --no-checkout https://github.com/ptai-eng/synapse-mcp.git "Synapse checkout"
-git -C "Synapse checkout" checkout --detach 1fa654be73d582e9ae4778da0d757e9112a6bac1
+git -C "Synapse checkout" checkout --detach v0.3.0
 cmake -S "Synapse checkout" -B "Synapse reference build" -G "Visual Studio 17 2022" -A x64 -T "v143,version=14.44" "-DCMAKE_SYSTEM_VERSION=10.0.26100.0" -DSYNAPSE_MCP_BUILD_EXAMPLES=ON -DSYNAPSE_MCP_BUILD_TESTS=OFF
 cmake --build "Synapse reference build" --config Debug --target native_status --parallel 2
 ```
 
 The executable is `Synapse reference build/examples/Debug/native_status.exe`. An MCP host launches it with no arguments and pipe-backed stdin/stdout. Use its absolute path in your host's stdio configuration. Stdout carries UTF-8 newline-delimited JSON-RPC; send diagnostics to stderr. Running it in a human console is not an interactive demonstration.
+
+### Linux
+
+With the qualified GCC 14.4/libstdc++ environment and Ninja available, start in an empty working directory:
+
+```sh
+git clone --no-checkout https://github.com/ptai-eng/synapse-mcp.git "Synapse checkout"
+git -C "Synapse checkout" checkout --detach v0.3.0
+cmake -S "Synapse checkout" -B "Synapse Linux build" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSYNAPSE_MCP_BUILD_EXAMPLES=ON -DSYNAPSE_MCP_BUILD_TESTS=OFF
+cmake --build "Synapse Linux build" --target native_status --parallel 2
+```
+
+Linux produces `Synapse Linux build/examples/native_status`. The [CI workflow](.github/workflows/ci.yml) pins the exact qualified container and tool setup. A different compiler or standard library requires separate qualification.
+
+### What the reference exposes
 
 [Native reference source](examples/native_status.cpp) exposes application-owned state through:
 
@@ -46,15 +70,6 @@ The executable is `Synapse reference build/examples/Debug/native_status.exe`. An
 | Prompt `explain_status` | Returns a user message containing that snapshot. |
 
 Snapshots include uptime, the counter and its scope. See the [official-client reproduction](docs/verification/m1.md#clean-checkout-reference-and-consumer) for a complete initialize/discover/call/read/get flow and the [Inspector Web evidence](docs/verification/m1.md#inspector-web-session) for the verified host session.
-
-**Linux shell**, with the qualified GCC 14.4/libstdc++ environment and Ninja available, from the directory containing the checkout:
-
-```sh
-cmake -S "Synapse checkout" -B "Synapse Linux build" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSYNAPSE_MCP_BUILD_EXAMPLES=ON -DSYNAPSE_MCP_BUILD_TESTS=OFF
-cmake --build "Synapse Linux build" --target native_status --parallel 2
-```
-
-Linux produces `Synapse Linux build/examples/native_status`. The [CI workflow](.github/workflows/ci.yml) pins the exact qualified container and tool setup. A different compiler or standard library requires separate qualification.
 
 ## Embed in your application
 
@@ -103,9 +118,25 @@ cmake --build "Synapse consumer build" --config Debug --parallel 2
 
 This fixture checks source-tree linking, propagation of C++23 from a C++17 parent, dependency include roots and schema behavior.
 
+## Runtime architecture
+
+A host launches the application and exchanges UTF-8 newline-delimited JSON-RPC over stdin/stdout. Native transport code frames input and bounds buffered output; the server validates envelopes and initialization state before dispatch. Registered application handlers and policy hooks execute on one owned worker. The server owns that work but borrows the transport and application state.
+
+| Boundary | Contract | Implementation |
+|---|---|---|
+| Transport | Bounded frames; interruptible SDK-owned I/O on Windows pipes and POSIX streams | [Transport](include/synapse/transport.hpp) |
+| Protocol and lifecycle | MCP `2025-11-25`; register before start; typed errors; explicit stop/join | [Server](include/synapse/server.hpp) |
+| Application execution | One owned worker; bounded queue; cooperative cancellation | [Executor](include/synapse/detail/owned_executor.hpp) |
+| Tool inputs | Compile schemas at registration; validate arguments before callbacks | [Schema adapter](include/synapse/detail/schema_validator.hpp) |
+| Local policy | Queue/rate limits, authorization hooks and output checks; application supplies domain rules | [Options](include/synapse/server_options.hpp) |
+
+These boundaries support embedding in an existing native application. Applications must synchronize their own shared state; non-cooperative callbacks can delay shutdown. See the lifecycle requirements in the [embedding example](#embed-in-your-application).
+
 ## Verified scope and limits
 
-The [verification record](docs/verification/m1.md) ties results to runtime source `1fa654be73d582e9ae4778da0d757e9112a6bac1` and records exact environments and limits:
+**Release gate:** [all four CI jobs passed](https://github.com/ptai-eng/synapse-mcp/actions/runs/41053327751) on the tagged commit `eb282409398ecf87ce25b47c8aa397a33a5e5bf0`: Windows, Linux functional, ASan+UBSan and TSan.
+
+The historical [M1 verification record](docs/verification/m1.md) ties the following acceptance results to runtime source `1fa654be73d582e9ae4778da0d757e9112a6bac1` and records exact environments and limits:
 
 | Environment | Recorded result |
 |---|---|
@@ -140,11 +171,11 @@ cmake --build "Synapse reference build" --config Debug --parallel 2
 ctest --test-dir "Synapse reference build" -C Debug --output-on-failure
 ```
 
-Official-client tests require the pinned Node/npm tools and `SYNAPSE_MCP_BUILD_INTEROP_TESTS=ON`; follow the [focused interop commands](docs/verification/m1.md#clean-checkout-reference-and-consumer). Build the relevant targets before invoking CTest. The hosted matrix covers the unchanged runtime; the verification record distinguishes fresh documentation reproductions from full regression runs.
+Official-client tests require the pinned Node/npm tools and `SYNAPSE_MCP_BUILD_INTEROP_TESTS=ON`; follow the [focused interop commands](docs/verification/m1.md#clean-checkout-reference-and-consumer). Build the relevant targets before invoking CTest. The release CI checks the tagged source; the M1 verification record preserves earlier acceptance runs and their exact source revisions.
 
 Start with the [M1 specification](specs/001-native-stdio-foundation/spec.md), [product/protocol decision](docs/decisions/0001-product-and-protocol.md) and [constitution](.specify/memory/constitution.md). Add behavioral tests for runtime changes and record scope decisions. The [implementation checklist](tasks/todo.md) tracks development work.
 
-The [README reproduction record](docs/verification/readme-2026-10-29.md) records the clean-checkout checks and remaining platform limits.
+The [release README reproduction record](docs/verification/readme-2026-10-30.md) records the clean-checkout reference, consumer, embedding sample and official-client checks on `v0.3.0`, with the remaining platform limits.
 
 ## License
 
