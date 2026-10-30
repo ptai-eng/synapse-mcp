@@ -2,7 +2,7 @@
 
 Expose native application state and operations to an MCP host from C++23. Synapse provides a **header-only server core** for local, host-launched **stdio** integrations targeting MCP **2025-11-25**.
 
-The `codex/product-protocol-foundation` source branch contains the M1 runtime and its verification evidence. The commands below pin the published runtime commit `1fa654b` for reproduction. M1 names a development milestone; the CMake/reference version remains `0.2.0`. These instructions describe source-tree embedding, with no published M1 package or installed `find_package` export.
+The `codex/m1` source branch contains the M1 runtime and its verification evidence. The commands below pin the published runtime commit `1fa654b` for reproduction. M1 names a development milestone; the CMake/reference version remains `0.2.0`. These instructions describe source-tree embedding, with no published M1 package or installed `find_package` export.
 
 ## Build the native reference
 
