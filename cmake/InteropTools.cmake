@@ -1,0 +1,38 @@
+find_program(SYNAPSE_INTEROP_NODE NAMES node node.exe)
+if(NOT SYNAPSE_INTEROP_NODE)
+    message(FATAL_ERROR "Interop tests require Node 24.22.1 on PATH")
+endif()
+execute_process(COMMAND "${SYNAPSE_INTEROP_NODE}" --version OUTPUT_VARIABLE _node_version OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _node_result)
+if(NOT _node_result EQUAL 0 OR NOT _node_version STREQUAL "v24.22.1")
+    message(FATAL_ERROR "Interop tests require Node 24.22.1; found ${_node_version}")
+endif()
+execute_process(COMMAND "${SYNAPSE_INTEROP_NODE}" --input-type=module -e
+    "import {Client} from '@modelcontextprotocol/client'; import {StdioClientTransport} from '@modelcontextprotocol/client/stdio'; import {readFileSync} from 'node:fs'; const p=JSON.parse(readFileSync('node_modules/@modelcontextprotocol/client/package.json')); const i=JSON.parse(readFileSync('node_modules/@modelcontextprotocol/inspector/package.json')); if(p.version!=='2.4.0'||i.version!=='2.12.0'||!Client||!StdioClientTransport) process.exit(1)"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests/interop"
+    RESULT_VARIABLE _sdk_result ERROR_VARIABLE _sdk_error)
+if(NOT _sdk_result EQUAL 0)
+    message(FATAL_ERROR "Interop tests require npm ci --ignore-scripts and exact client 2.4.0 / Inspector 2.12.0: ${_sdk_error}")
+endif()
+if(NOT TARGET native_status)
+    message(FATAL_ERROR "Interop tests require SYNAPSE_MCP_BUILD_EXAMPLES=ON (native_status)")
+endif()
+find_package(Git QUIET)
+if(NOT GIT_FOUND)
+    message(FATAL_ERROR "Interop evidence requires Git to identify the source commit")
+endif()
+set(SYNAPSE_INTEROP_COMPILER "${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+# A compiled probe shares the reference target's effective includes, definitions,
+# options and C++ language settings; it measures headers rather than toolset names.
+add_executable(synapse_interop_environment "${PROJECT_SOURCE_DIR}/tests/interop/environment.cpp")
+target_link_libraries(synapse_interop_environment PRIVATE synapse::mcp)
+foreach(_property IN ITEMS INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS COMPILE_FEATURES)
+    set_property(TARGET synapse_interop_environment PROPERTY ${_property}
+        "$<TARGET_PROPERTY:native_status,${_property}>")
+endforeach()
+foreach(_property IN ITEMS CXX_STANDARD CXX_STANDARD_REQUIRED CXX_EXTENSIONS MSVC_RUNTIME_LIBRARY)
+    get_target_property(_value native_status ${_property})
+    if(NOT _value STREQUAL "_value-NOTFOUND")
+        set_property(TARGET synapse_interop_environment PROPERTY ${_property} "${_value}")
+    endif()
+endforeach()
+add_dependencies(native_status synapse_interop_environment)

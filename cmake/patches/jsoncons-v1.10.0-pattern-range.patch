@@ -1,0 +1,29 @@
+diff --git a/include/jsoncons_ext/jsonschema/common/keyword_validator.hpp b/include/jsoncons_ext/jsonschema/common/keyword_validator.hpp
+index 45e9040..c9ab958 100644
+--- a/include/jsoncons_ext/jsonschema/common/keyword_validator.hpp
++++ b/include/jsoncons_ext/jsonschema/common/keyword_validator.hpp
+@@ -643 +643,2 @@ namespace jsonschema {
+-            if (!std::regex_search(instance.as_cstring(), regex_))
++            const auto value = instance.as_string_view();
++            if (!std::regex_search(value.begin(), value.end(), regex_))
+@@ -2593 +2594 @@ namespace jsonschema {
+-                auto prop_it = properties_.find(prop.key().c_str());
++                auto prop_it = properties_.find(prop.key());
+@@ -2665 +2666 @@ namespace jsonschema {
+-                auto prop_it = properties_.find(prop.key().c_str());
++                auto prop_it = properties_.find(prop.key());
+@@ -2909 +2910 @@ namespace jsonschema {
+-                        auto prop_it = allowed_properties.find(prop.key().c_str());
++                        auto prop_it = allowed_properties.find(prop.key());
+@@ -2941 +2942 @@ namespace jsonschema {
+-                        auto prop_it = allowed_properties.find(prop.key().c_str());
++                        auto prop_it = allowed_properties.find(prop.key());
+@@ -3025 +3026 @@ namespace jsonschema {
+-                    auto prop_it = allowed_properties.find(prop.key().c_str());
++                    auto prop_it = allowed_properties.find(prop.key());
+@@ -3930 +3931 @@ namespace jsonschema {
+-                        auto prop_it = results.evaluated_properties.find(prop.key().c_str());
++                        auto prop_it = results.evaluated_properties.find(prop.key());
+@@ -3966 +3967 @@ namespace jsonschema {
+-                        auto prop_it = results.evaluated_properties.find(prop.key().c_str());
++                        auto prop_it = results.evaluated_properties.find(prop.key());

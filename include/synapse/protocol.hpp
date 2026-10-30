@@ -49,11 +49,31 @@ inline void from_json(const nlohmann::json& j, error& e) {
     j.at("message").get_to(e.message);
     if (j.contains("data")) {
         e.data = j.at("data");
+    } else {
+        e.data.reset();
     }
 }
 
 // JSON-RPC Request/Response IDs can be string, integer, or null
-using json_rpc_id = std::variant<std::string, int64_t, std::nullptr_t>;
+using json_rpc_id = std::variant<std::string, int64_t, uint64_t, std::nullptr_t>;
+
+namespace detail {
+
+inline json_rpc_id read_json_rpc_id(const nlohmann::json& value) {
+    // nlohmann considers unsigned numbers integers too: test unsigned first.
+    if (value.is_number_unsigned()) {
+        return value.get<uint64_t>();
+    }
+    if (value.is_number_integer()) {
+        return value.get<int64_t>();
+    }
+    if (value.is_string()) {
+        return value.get<std::string>();
+    }
+    return nullptr;
+}
+
+} // namespace detail
 
 // Base JSON-RPC Message
 struct message {
@@ -85,15 +105,11 @@ inline void to_json(nlohmann::json& j, const request& r) {
 inline void from_json(const nlohmann::json& j, request& r) {
     j.at("jsonrpc").get_to(r.jsonrpc);
     j.at("method").get_to(r.method);
-    if (j.at("id").is_number_integer()) {
-        r.id = j.at("id").get<int64_t>();
-    } else if (j.at("id").is_string()) {
-        r.id = j.at("id").get<std::string>();
-    } else {
-        r.id = nullptr;
-    }
+    r.id = detail::read_json_rpc_id(j.at("id"));
     if (j.contains("params")) {
         r.params = j.at("params");
+    } else {
+        r.params.reset();
     }
 }
 
@@ -115,6 +131,8 @@ inline void from_json(const nlohmann::json& j, notification& n) {
     j.at("method").get_to(n.method);
     if (j.contains("params")) {
         n.params = j.at("params");
+    } else {
+        n.params.reset();
     }
 }
 
@@ -124,6 +142,8 @@ struct response : message {
     std::optional<nlohmann::json> result;
     std::optional<error> err;
 };
+
+using incoming_message = std::variant<request, notification, response>;
 
 inline void to_json(nlohmann::json& j, const response& r) {
     j = nlohmann::json{{"jsonrpc", r.jsonrpc}};
@@ -149,13 +169,9 @@ inline void to_json(nlohmann::json& j, const response& r) {
 
 inline void from_json(const nlohmann::json& j, response& r) {
     j.at("jsonrpc").get_to(r.jsonrpc);
-    if (j.at("id").is_number_integer()) {
-        r.id = j.at("id").get<int64_t>();
-    } else if (j.at("id").is_string()) {
-        r.id = j.at("id").get<std::string>();
-    } else {
-        r.id = nullptr;
-    }
+    r.id = detail::read_json_rpc_id(j.at("id"));
+    r.err.reset();
+    r.result.reset();
     if (j.contains("error")) {
         r.err = j.at("error").get<error>();
     } else if (j.contains("result")) {
@@ -178,7 +194,7 @@ inline void to_json(nlohmann::json& j, const tool& t) {
 
 inline void from_json(const nlohmann::json& j, tool& t) {
     j.at("name").get_to(t.name);
-    j.at("description").get_to(t.description);
+    t.description = j.value("description", std::string{});
     j.at("inputSchema").get_to(t.inputSchema);
 }
 
@@ -199,9 +215,11 @@ inline void to_json(nlohmann::json& j, const resource& r) {
 inline void from_json(const nlohmann::json& j, resource& r) {
     j.at("uri").get_to(r.uri);
     j.at("name").get_to(r.name);
-    j.at("description").get_to(r.description);
+    r.description = j.value("description", std::string{});
     if (j.contains("mimeType")) {
         r.mimeType = j.at("mimeType").get<std::string>();
+    } else {
+        r.mimeType.reset();
     }
 }
 
@@ -217,12 +235,8 @@ inline void to_json(nlohmann::json& j, const prompt_argument& pa) {
 
 inline void from_json(const nlohmann::json& j, prompt_argument& pa) {
     j.at("name").get_to(pa.name);
-    if (j.contains("description")) {
-        j.at("description").get_to(pa.description);
-    }
-    if (j.contains("required")) {
-        j.at("required").get_to(pa.required);
-    }
+    pa.description = j.value("description", std::string{});
+    pa.required = j.value("required", false);
 }
 
 struct prompt {
@@ -240,11 +254,11 @@ inline void to_json(nlohmann::json& j, const prompt& p) {
 
 inline void from_json(const nlohmann::json& j, prompt& p) {
     j.at("name").get_to(p.name);
-    if (j.contains("description")) {
-        j.at("description").get_to(p.description);
-    }
+    p.description = j.value("description", std::string{});
     if (j.contains("arguments")) {
         j.at("arguments").get_to(p.arguments);
+    } else {
+        p.arguments.clear();
     }
 }
 

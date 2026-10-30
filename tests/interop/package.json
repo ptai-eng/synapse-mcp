@@ -1,0 +1,9 @@
+{
+  "name": "synapse-mcp-interop",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@modelcontextprotocol/inspector": "2.12.0"
+  }
+}

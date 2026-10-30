@@ -1,0 +1,331 @@
+--- a/include/jsoncons_ext/jsonschema/common/keyword_validator.hpp
++++ b/include/jsoncons_ext/jsonschema/common/keyword_validator.hpp
+@@ -34,7 +34,10 @@
+ #include <jsoncons_ext/jsonschema/common/validator.hpp>
+ 
+ #if defined(JSONCONS_HAS_STD_REGEX)
+-#include <regex>
++#include <srell.hpp>
++#if defined(SRELL_NO_UNICODE_DATA) || defined(SRELL_NO_UNICODE_PROPERTY) || defined(SRELL_NO_UNICODE_ICASE) || defined(SRELL_NO_UTF8)
++#error "Synapse schema validation requires SRELL Unicode support"
++#endif
+ #endif
+ 
+ namespace jsoncons {
+@@ -615,11 +618,11 @@
+         using keyword_validator_ptr_type = std::unique_ptr<keyword_validator<Json>>;
+ 
+         std::string pattern_string_;
+-        std::regex regex_;
++        srell::u8cregex regex_;
+ 
+     public:
+         pattern_validator(const Json& schema, const uri& schema_location, const std::string& custom_message,
+-            const std::string& pattern_string, const std::regex& regex)
++            const std::string& pattern_string, const srell::u8cregex& regex)
+             : keyword_validator<Json>("pattern", schema, schema_location, custom_message), 
+               pattern_string_(pattern_string), regex_(regex)
+         {
+@@ -640,7 +643,8 @@
+ 
+             eval_context<Json> this_context(context, this->keyword());
+ 
+-            if (!std::regex_search(instance.as_cstring(), regex_))
++            const auto value = instance.as_string_view();
++            if (!srell::regex_search(value.begin(), value.end(), regex_))
+             {
+                 std::string message("String '");
+                 message.append(instance.as_cstring());
+@@ -2590,7 +2594,7 @@
+ 
+             for (const auto& prop : instance.object_range()) 
+             {
+-                auto prop_it = properties_.find(prop.key().c_str());
++                auto prop_it = properties_.find(prop.key());
+ 
+                 // check if it is in "properties"
+                 if (prop_it != properties_.end()) 
+@@ -2662,7 +2666,7 @@
+ 
+             for (const auto& prop : instance.object_range()) 
+             {
+-                auto prop_it = properties_.find(prop.key().c_str());
++                auto prop_it = properties_.find(prop.key());
+ 
+                 if (prop_it != properties_.end()) 
+                 {
+@@ -2716,11 +2720,11 @@
+         using keyword_validator_ptr_type = typename keyword_validator<Json>::keyword_validator_ptr_type;
+         using schema_validator_ptr_type = typename schema_validator<Json>::schema_validator_ptr_type;
+ 
+-        std::vector<std::pair<std::regex, schema_validator_ptr_type>> pattern_properties_;
++        std::vector<std::pair<srell::u8cregex, schema_validator_ptr_type>> pattern_properties_;
+ 
+     public:
+         pattern_properties_validator(const Json& schema, const uri& schema_location, const std::string& custom_message,
+-            std::vector<std::pair<std::regex, schema_validator_ptr_type>>&& pattern_properties)
++            std::vector<std::pair<srell::u8cregex, schema_validator_ptr_type>>&& pattern_properties)
+             : keyword_validator<Json>("patternProperties", schema, std::move(schema_location), custom_message),
+               pattern_properties_(std::move(pattern_properties))
+         {
+@@ -2754,7 +2758,7 @@
+                 // check all matching "patternProperties"
+                 for (auto& schema_pp : pattern_properties_)
+                 {
+-                    if (std::regex_search(prop.key(), schema_pp.first)) 
++                    if (srell::regex_search(prop.key(), schema_pp.first)) 
+                     {
+                         allowed_properties.insert(std::string(prop.name()));
+                         std::size_t errors = reporter.error_count();
+@@ -2802,7 +2806,7 @@
+                 // check all matching "patternProperties"
+                 for (auto& schema_pp : pattern_properties_)
+                 {
+-                    if (std::regex_search(prop.key(), schema_pp.first)) 
++                    if (srell::regex_search(prop.key(), schema_pp.first)) 
+                     {
+                         allowed_properties.insert(std::string(prop.name()));
+                         result = schema_pp.second->walk(prop_context, prop.value() , prop_location, reporter, patch);
+@@ -2906,7 +2910,7 @@
+                         eval_context<Json> prop_context{this_context, prop.name(), evaluation_flags{}};
+                         jsonpointer::json_pointer prop_location = instance_location / prop.key();
+                         // check if it is in "allowed properties"
+-                        auto prop_it = allowed_properties.find(prop.key().c_str());
++                        auto prop_it = allowed_properties.find(prop.key());
+                         if (prop_it == allowed_properties.end()) 
+                         {
+                             std::string message{"Additional property '"};
+@@ -2938,7 +2942,7 @@
+                     for (const auto& prop : instance.object_range()) 
+                     {
+                         // check if it is in "allowed properties"
+-                        auto prop_it = allowed_properties.find(prop.key().c_str());
++                        auto prop_it = allowed_properties.find(prop.key());
+                         if (prop_it == allowed_properties.end()) 
+                         {
+                             eval_context<Json> prop_context{this_context, prop.name(), evaluation_flags{}};
+@@ -3022,7 +3026,7 @@
+                 for (const auto& prop : instance.object_range()) 
+                 {
+                     // check if it is in "allowed properties"
+-                    auto prop_it = allowed_properties.find(prop.key().c_str());
++                    auto prop_it = allowed_properties.find(prop.key());
+                     if (prop_it == allowed_properties.end()) 
+                     {
+                         eval_context<Json> prop_context{this_context, prop.name(), evaluation_flags{}};
+@@ -3927,7 +3931,7 @@
+                     for (const auto& prop : instance.object_range()) 
+                     {
+                         // check if it is in "evaluated_properties"
+-                        auto prop_it = results.evaluated_properties.find(prop.key().c_str());
++                        auto prop_it = results.evaluated_properties.find(prop.key());
+                         if (prop_it == results.evaluated_properties.end()) 
+                         {
+                             eval_context<Json> prop_context{this_context, prop.name(), evaluation_flags{}};
+@@ -3963,7 +3967,7 @@
+                     for (const auto& prop : instance.object_range()) 
+                     {
+                         // check if it is in "evaluated_properties"
+-                        auto prop_it = results.evaluated_properties.find(prop.key().c_str());
++                        auto prop_it = results.evaluated_properties.find(prop.key());
+                         if (prop_it == results.evaluated_properties.end()) 
+                         {
+                             //std::cout << "Not in evaluated properties: " << prop.key() << "\n";
+--- a/include/jsoncons_ext/jsonschema/common/keyword_validator_factory.hpp
++++ b/include/jsoncons_ext/jsonschema/common/keyword_validator_factory.hpp
+@@ -84,14 +84,14 @@
+             uri schema_location = context.get_base_uri();
+             std::string custom_message = context.get_custom_message(keyword);
+ 
+-            std::vector<std::pair<std::regex, schema_validator_ptr_type>> pattern_properties;
++            std::vector<std::pair<srell::u8cregex, schema_validator_ptr_type>> pattern_properties;
+             
+             for (const auto& prop : sch.object_range())
+             {
+                 jsoncons::string_view sub_keys[] = {keyword};
+                 pattern_properties.emplace_back(
+                     std::make_pair(
+-                        std::regex(prop.key(), std::regex::ECMAScript),
++                        srell::u8cregex(prop.key(), srell::u8cregex::ECMAScript),
+                         factory_->make_cross_draft_schema_validator(context, prop.value(), sub_keys, anchor_dict)));
+                 
+             }
+@@ -456,7 +456,7 @@
+         {
+             uri schema_location = context.make_schema_location("pattern");
+             auto pattern_string = sch.template as<std::string>();
+-            auto regex = std::regex(pattern_string, std::regex::ECMAScript);
++            auto regex = srell::u8cregex(pattern_string, srell::u8cregex::ECMAScript);
+             return jsoncons::make_unique<pattern_validator<Json>>(parent, schema_location, context.get_custom_message("pattern"), 
+                 pattern_string, regex);
+         }
+--- a/include/jsoncons_ext/jsonschema/common/format_validators.hpp
++++ b/include/jsoncons_ext/jsonschema/common/format_validators.hpp
+@@ -21,7 +21,10 @@
+ #include <jsoncons_ext/jsonschema/common/validator.hpp>
+ 
+ #if defined(JSONCONS_HAS_STD_REGEX)
+-#include <regex>
++#include <srell.hpp>
++#if defined(SRELL_NO_UNICODE_DATA) || defined(SRELL_NO_UNICODE_PROPERTY) || defined(SRELL_NO_UNICODE_ICASE) || defined(SRELL_NO_UTF8)
++#error "Synapse schema validation requires SRELL Unicode support"
++#endif
+ #endif
+ 
+ namespace jsoncons {
+@@ -1237,7 +1240,7 @@
+ #if defined(JSONCONS_HAS_STD_REGEX)
+         JSONCONS_TRY 
+         {
+-            std::regex re(sv.data(), sv.size(), std::regex::ECMAScript);
++            srell::u8cregex re(sv.data(), sv.size(), srell::u8cregex::ECMAScript);
+         }
+         JSONCONS_CATCH(...) 
+         {
+--- a/include/jsoncons_ext/jsonschema/common/schema_validator.hpp
++++ b/include/jsoncons_ext/jsonschema/common/schema_validator.hpp
+@@ -25,12 +25,24 @@
+     template <typename Json>
+     class schema_validator : public validator_base<Json>
+     {
++        // Non-owning: the compiled document owns every resource root.
++        const schema_validator<Json>* resource_root_ = nullptr;
+     public:
+         using schema_validator_ptr_type = typename std::unique_ptr<schema_validator<Json>>;
+ 
+     public:
+         schema_validator()
+         {}
++
++        const schema_validator<Json>* resource_root() const
++        {
++            return resource_root_ ? resource_root_ : this;
++        }
++
++        void set_resource_root(const schema_validator<Json>* root)
++        {
++            resource_root_ = root;
++        }
+ 
+         virtual jsoncons::optional<Json> get_default_value() const = 0;
+ 
+--- a/include/jsoncons_ext/jsonschema/common/schema_validator_factory_base.hpp
++++ b/include/jsoncons_ext/jsonschema/common/schema_validator_factory_base.hpp
+@@ -124,6 +124,24 @@
+             return schema_validator_ptr;
+         }
+         
++        typename schema_store_type::iterator find_schema(const uri& identifier)
++        {
++            auto found = schema_store_ptr_->find(identifier);
++            if (found != schema_store_ptr_->end() || identifier.fragment().empty())
++            {
++                return found;
++            }
++            // Anchors are registered under canonical $id, while a reference can
++            // name a retrieval alias. Resolve through that resource root only.
++            auto resource = schema_store_ptr_->find(uri(identifier, uri_fragment_part, ""));
++            if (resource == schema_store_ptr_->end() || resource->second == nullptr)
++            {
++                return found;
++            }
++            const auto& canonical = resource->second->schema_location();
++            return schema_store_ptr_->find(uri(canonical, uri_fragment_part, identifier.fragment()));
++        }
++
+         std::unique_ptr<document_schema_validator<Json>> get_schema_validator()
+         {                        
+             //std::cout << "schema_store:\n";
+@@ -138,7 +156,7 @@
+             {
+                 auto loc = unresolved_refs_[i].first;
+                 //std::cout << "unresolved: " << loc.string() << "\n";
+-                if (schema_store_ptr_->find(loc) == schema_store_ptr_->end()) // registry for this file is empty
++                if (find_schema(loc) == schema_store_ptr_->end()) // registry for this file is empty
+                 {
+                     bool found = false;
+                     for (auto it = resolve_funcs_.begin(); it != resolve_funcs_.end() && !found; ++it)
+@@ -148,7 +166,7 @@
+                         if (external_sch.is_object() || external_sch.is_bool())
+                         {
+                             anchor_uri_map_type anchor_dict2;
+-                            this->save_schema(make_cross_draft_schema_validator(compilation_context<Json>(uri_wrapper(loc.base())), 
++                            this->save_schema(make_cross_draft_schema_validator(compilation_context<Json>(uri_wrapper(uri(loc, uri_fragment_part, ""))), 
+                                 external_sch, {}, anchor_dict2));
+                             found = true;
+                         }
+@@ -156,7 +174,7 @@
+                     if (found)
+                     {
+                         // Try resolving again
+-                        if (schema_store_ptr_->find(loc) == schema_store_ptr_->end()) 
++                        if (find_schema(loc) == schema_store_ptr_->end()) 
+                         {
+                             JSONCONS_THROW(jsonschema::schema_error("Unresolved reference '" + loc.string() + "'"));
+                         }
+@@ -170,6 +188,19 @@
+ 
+             resolve_references();
+ 
++            // A registry entry can be a retrieval alias or an anchor. Use the
++            // validator's canonical location to preserve nested $id boundaries.
++            for (const auto& entry : *schema_store_ptr_)
++            {
++                auto* validator = entry.second;
++                auto resource = schema_store_ptr_->find(uri(validator->schema_location(), uri_fragment_part, ""));
++                if (resource == schema_store_ptr_->end() || resource->second == nullptr)
++                {
++                    JSONCONS_THROW(schema_error("Missing compiled schema resource root"));
++                }
++                validator->set_resource_root(resource->second);
++            }
++
+             return jsoncons::make_unique<document_schema_validator<Json>>(std::move(root_schema_), std::move(root_), std::move(schema_validators_));
+         }
+ 
+@@ -177,7 +208,7 @@
+         {
+             for (auto& ref : unresolved_refs_)
+             {
+-                auto it = schema_store_ptr_->find(ref.first);
++                auto it = find_schema(ref.first);
+                 if (it == schema_store_ptr_->end())
+                 {
+                     JSONCONS_THROW(schema_error("Undefined reference " + ref.first.string()));
+@@ -232,7 +263,7 @@
+         std::unique_ptr<ref_validator<Json>> get_or_create_reference(const Json& schema, const uri_wrapper& identifier)
+         {
+             // a schema already exists
+-            auto it = this->schema_store_ptr_->find(identifier.uri());
++            auto it = this->find_schema(identifier.uri());
+             if (it != this->schema_store_ptr_->end())
+             {
+                 return jsoncons::make_unique<ref_validator_type>(schema, identifier.uri(), (*it).second);
+--- a/include/jsoncons_ext/jsonschema/common/eval_context.hpp
++++ b/include/jsoncons_ext/jsonschema/common/eval_context.hpp
+@@ -85,9 +85,10 @@
+         : dynamic_scope_ { parent.dynamic_scope_ }, eval_path_{ parent.eval_path_ },
+           flags_(parent.flags_)
+     {
+-        if (validator->id() || dynamic_scope_.empty())
++        const auto* resource = validator->resource_root();
++        if (dynamic_scope_.empty() || dynamic_scope_.back() != resource)
+         {
+-            dynamic_scope_.push_back(validator);
++            dynamic_scope_.push_back(resource);
+         }
+     }
+ 
+@@ -96,9 +97,10 @@
+         : dynamic_scope_ { parent.dynamic_scope_ }, eval_path_{ parent.eval_path_ },
+           flags_(flags)
+     {
+-        if (validator->id() || dynamic_scope_.empty())
++        const auto* resource = validator->resource_root();
++        if (dynamic_scope_.empty() || dynamic_scope_.back() != resource)
+         {
+-            dynamic_scope_.push_back(validator);
++            dynamic_scope_.push_back(resource);
+         }
+     }
+ 
