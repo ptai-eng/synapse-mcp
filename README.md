@@ -2,9 +2,27 @@
 
 Expose native application state and operations to an MCP host from C++23. Synapse provides a **header-only server core** for local, host-launched **stdio** integrations targeting MCP **2025-11-25**.
 
-The `codex/m1` source branch contains the M1 runtime and its verification evidence. The commands below pin the published runtime commit `1fa654b` for reproduction. M1 names a development milestone; the CMake/reference version remains `0.2.0`. These instructions describe source-tree embedding, with no published M1 package or installed `find_package` export.
+The source on `master` prepares **v0.3.0**, the M1 native stdio foundation. This is a pre-1.0 SDK with breaking server API changes from v0.2; review the [migration guide](docs/migration/v0.2-to-m1.md) and [release notes](docs/releases/v0.3.0.md) before upgrading. Integration uses CMake source-tree embedding; no installed `find_package` export or package-manager distribution is provided.
 
-## Build the native reference
+The reproducible Quick Start below pins the previously qualified runtime commit `1fa654b`, which reports `0.2.0`. It reproduces the historical acceptance evidence. Release-specific verification and publication status are tracked in the release notes.
+
+To evaluate the v0.3.0 candidate from a fresh clone, replace the detached-checkout command below with `git -C "Synapse checkout" checkout master` and record `git -C "Synapse checkout" rev-parse HEAD` with your results. Once published, use `checkout --detach v0.3.0` for an immutable release checkout. The build and embedding commands are otherwise the same; historical evidence remains tied to its recorded commit.
+
+## Runtime architecture
+
+A host launches the application and exchanges UTF-8 newline-delimited JSON-RPC over stdin/stdout. Native transport code frames input and bounds buffered output; the server validates envelopes and initialization state before dispatch. Registered application handlers and policy hooks execute on one owned worker. The server owns that work but borrows the transport and application state.
+
+| Boundary | Contract | Implementation |
+|---|---|---|
+| Transport | Bounded frames; interruptible SDK-owned I/O on Windows pipes and POSIX streams | [Transport](include/synapse/transport.hpp) |
+| Protocol and lifecycle | MCP `2025-11-25`; register before start; typed errors; explicit stop/join | [Server](include/synapse/server.hpp) |
+| Application execution | One owned worker; bounded queue; cooperative cancellation | [Executor](include/synapse/detail/owned_executor.hpp) |
+| Tool inputs | Compile schemas at registration; validate arguments before callbacks | [Schema adapter](include/synapse/detail/schema_validator.hpp) |
+| Local policy | Queue/rate limits, authorization hooks and output checks; application supplies domain rules | [Options](include/synapse/server_options.hpp) |
+
+These boundaries support embedding in an existing native application. Applications must synchronize their own shared state; non-cooperative callbacks can delay shutdown. See the lifecycle requirements in the embedding example below.
+
+## Quick Start: build the native reference
 
 You need Git, CMake 3.20+ and a C++23 compiler/standard library with `std::expected`. CMake uses checked-in nlohmann/json 3.11.3 and fetches pinned jsoncons/SRELL sources with the qualified schema correction. The first uncached configure needs network access. Tests also fetch pinned Catch2 and schema fixtures. See [dependency versions, correction and notices](docs/third-party.md).
 

@@ -38,7 +38,7 @@ TEST_CASE("M1.reference.real_state", "[M1][reference]") {
         return std::chrono::steady_clock::time_point{} + std::chrono::milliseconds(clock_ms.load());
     });
     reference_transport transport;
-    synapse::server server(transport, {"native-status", "0.2.0"});
+    synapse::server server(transport, {"native-status", "0.3.0"});
     REQUIRE(register_native_status(server, state));
     REQUIRE(server.start());
     auto initialized = transport.request(0, "initialize", {{"protocolVersion", "2025-11-25"},

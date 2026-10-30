@@ -18,7 +18,7 @@ namespace synapse {
 // One owner waits at a time. Destruction can wait for noncooperative callbacks.
 class server {
 public:
-    struct server_info { std::string name = "synapse-mcp-server"; std::string version = "0.2.0"; };
+    struct server_info { std::string name = "synapse-mcp-server"; std::string version = "0.3.0"; };
     template<class Transport>
     explicit server(Transport& transport, server_info info = {}, server_options options = {})
         : info_(std::move(info)), options_(std::move(options)),
