@@ -1,6 +1,6 @@
 # ADR-001: Native stdio servers and MCP 2025-11-25
 
-- Status: Accepted design; implementation pending
+- Status: Accepted; M1 runtime implemented and verified. README reproduction is recorded in docs/verification/readme-2026-10-29.md. No M1 release published.
 - Date: 2026-10-25
 - Applies to: the first verified native stdio milestone, M1
 
@@ -10,7 +10,7 @@ Synapse MCP is a **server-first, header-only C++23 SDK for exposing native appli
 
 Pin **MCP `2025-11-25` as M1's single supported revision target**. Track `2026-07-28` as a separate migration milestone. Do not implement dual-era negotiation or promise fallback across revisions in M1.
 
-This decision does not change the running code. The implementation assessed at `22c2126` still hard-codes `2024-11-05` and has known lifecycle defects. Neither the selected target nor current protocol conformance is established by this documentation commit. [Specification 001](../../specs/001-native-stdio-foundation/spec.md) defines the evidence required to claim support.
+Historical baseline (2026-10-25): the implementation assessed at `22c2126` still hard-codes `2024-11-05` and has known lifecycle defects. That initial decision alone did not establish protocol conformance. The implemented M1 profile and its verification are now recorded in [verification evidence](../verification/m1.md). [Specification 001](../../specs/001-native-stdio-foundation/spec.md) defines the evidence required to claim support.
 
 ## Context and primary user
 
@@ -43,8 +43,8 @@ For product scope, a symmetric client/server SDK would spread verification acros
 
 | Revision or surface | Current implementation | M1 commitment |
 |---|---|---|
-| `2024-11-05` | Partial, with known defects; not certified | No compatibility guarantee or fallback |
-| `2025-11-25` | Migration not implemented | Single target; support claim gated by M1 acceptance |
+| `2024-11-05` | Historical v0.2 baseline only; no M1 fallback | No compatibility guarantee or fallback |
+| `2025-11-25` | Selected server profile implemented; runtime and host evidence recorded | Single supported M1 target; see verification evidence and README reproduction |
 | `2026-07-28` | Not implemented | Deferred migration; no modern-mode claim |
 | SDK client/process/SSE APIs | Experimental | Existing surfaces are not promoted to supported status by M1 |
 

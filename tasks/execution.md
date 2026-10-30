@@ -225,3 +225,9 @@ Ruling: Exercise application-worker ownership through a minimal typed static res
 - User clarified that the agent should finish T01-T21 while leaving README for later. Ruling: T21 supporting documentation is the authorized completion scope; preserve the original AC-08 requirement as deferred instead of silently waiving it. Cost if wrong: a later README acceptance pass; no runtime change.
 - README draft was built/reproduced from a fresh clean remote1fa clone: reference/consumer passed, extracted C++/CMake sample compiled, official-client exactrevision/application flow passed. Independent reviewer messaged content/evidence APPROVE for spec compliance and quality, then hit usage limit before writing its final report. Reviewer flagged current stale todo/plan/ADR status; controller reconciled those lines. No new runtime issue was reported. Draft/report remain ignored; README restored to committed content per latest user direction.
 - T01-T20 and non-README T21 are complete and reviewed; [final handoff](checkpoint-m1-foundation.md) maps their evidence. README/AC-08 and release publication remain deferred. No push/tag/release/merge or analysis/export cleanup performed.
+
+### README acceptance and documentation closure, 2026-10-30
+
+- User resumed work after the completed README Quick Start reproduction. Reconciled spec/verification/checklist status with the retained fresh-clone Windows reference, consumer, extracted C++/CMake sample and official-client evidence. Historical checkpoint/deferral records remain labeled as such.
+- Runtime code is unchanged. Prior full regression and hosted sanitizer results retain their source/platform limits. SkillSpector aggregate Critical and the real TSan CI isolation limitation remain public.
+- Commit/publication scope is the existing foundation branch and reviewed documentation/evidence. No merge, tag, version bump or release is included. Personal analysis and the original Inspector export remain untracked.

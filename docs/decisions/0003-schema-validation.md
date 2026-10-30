@@ -1,6 +1,6 @@
 # ADR-003: A pinned JSON Schema backend with an explicit dependency correction
 
-- Status: Superseded in part by ADR-004; locally qualified after its corrections
+- Status: Superseded in part by ADR-004; corrected implementation qualified locally and in hosted Windows/Linux CI
 - Date: 2026-10-25
 - Qualification decision: [ADR-004](0004-schema-qualification-corrections.md)
 - Applies to: M1's MCP `2025-11-25` tool-input validation
@@ -113,10 +113,10 @@ Sources: [evaluation options](https://github.com/danielaparker/jsoncons/blob/v1.
 
 ## Qualification and release gate
 
-Qualification has **not been executed** in this planning step. The implementation must first reproduce the uncorrected NUL-string failure, then demonstrate the corrected result and run the relevant official 2020-12 test-suite cases on the declared Linux and Windows toolchains.
+Historical planning baseline (2026-10-25): qualification had **not been executed** at this step. The corrected implementation has since passed the mandatory 1,302-case suite on Windows/Linux, including hosted sanitizer jobs; see [ADR-004](0004-schema-qualification-corrections.md) and the [verification record](../verification/m1.md). The paragraphs below retain the original qualification requirements. The implementation must first reproduce the uncorrected NUL-string failure, then demonstrate the corrected result and run the relevant official 2020-12 test-suite cases on the declared Linux and Windows toolchains.
 
 The gate includes malformed registration schemas, absent/explicit/unsupported dialects, unresolved offline references, required unsupported vocabularies, `$defs`/`$ref`/`$dynamicRef`, `prefixItems`, `unevaluatedProperties` and `unevaluatedItems`, branch combinations, numeric boundaries, regex compilation errors, NUL-containing strings and keys, and the regex-disabled build rejection. Check that validation leaves input JSON unchanged and that diagnostic values remain sanitized.
 
 A failed mandatory case blocks tool migration and any 2020-12 support claim. Do not remove the case, reinterpret invalid engine output as valid, or substitute an undocumented validator. Resolve the dependency decision explicitly before proceeding.
 
-The preliminary full-suite backend probe on 2026-10-25 found seven failing cases out of 1,302: one dynamic-reference scope case and six Unicode property-escape cases. The final adapter gate must retain these cases. The user requested a checkpoint after T10; runtime ownership, I/O and lifecycle work may be prepared for that review while schema qualification remains blocked. This does not authorize tool migration or a conformance claim. A backend/regex decision that resolves these failures remains necessary before T11 can pass its gate.
+Historical probe and checkpoint constraints (resolved by ADR-004): the preliminary full-suite backend probe on 2026-10-25 found seven failing cases out of 1,302: one dynamic-reference scope case and six Unicode property-escape cases. The final adapter gate must retain these cases. The user requested a checkpoint after T10; runtime ownership, I/O and lifecycle work may be prepared for that review while schema qualification remains blocked. This does not authorize tool migration or a conformance claim. A backend/regex decision that resolves these failures remains necessary before T11 can pass its gate.

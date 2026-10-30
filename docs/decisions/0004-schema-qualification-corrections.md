@@ -1,6 +1,6 @@
 # ADR-004: Complete the T05 schema qualification boundary
 
-- Status: Implemented, reviewed and locally qualified on Windows and Linux
+- Status: Implemented and reviewed; qualified on Windows/Linux locally and in hosted functional, ASan+UBSan and TSan jobs (see ../verification/m1.md)
 - Date: 2026-10-26
 - Supersedes: ADR-003's NUL-only correction limit and `std::regex` implementation choice; its offline, immutable and sanitized adapter contracts remain binding
 - Scope: T01/T05 dependency qualification within the user's T01-T10 completion request
@@ -38,6 +38,6 @@ SkillSpector scanned the mirror's current HEAD, which resolves to the exact pinn
 
 Verify the exact commit and reviewed preimage/postimage hashes for every corrected file, not only `keyword_validator.hpp`. Accept only a complete original state, the exact previously qualified NUL-only state for forward migration, or the complete new postimage. Reject unknown edits and partially applied corrections. Also reject modified/untracked dependency content outside the allowlisted correction and unqualified parent/source overrides. Reconfiguration must recheck provenance, and reapplication is a no-op only on the complete exact postimage. Freeze the SRELL header identities and fail on source drift.
 
-Before completion, require targeted RED/GREEN regressions for fragment/pointer/anchor entry, nested resource boundaries and compiled-state lifetime; Unicode property/complement patterns, full UTF-8 code points, invalid expressions, embedded NULs and schema combinators; correction idempotence, tampering and consumer propagation. Run all 46 mandatory suite files / 384 groups / 1302 cases with zero skips and zero failures on native Windows and Linux. Run accumulated T01-T10 checks and independent review. Keep the gate failing until the results establish success.
+The following completion requirements were met; results are recorded in the [verification record](../verification/m1.md). Require these checks again after relevant implementation changes: targeted RED/GREEN regressions for fragment/pointer/anchor entry, nested resource boundaries and compiled-state lifetime; Unicode property/complement patterns, full UTF-8 code points, invalid expressions, embedded NULs and schema combinators; correction idempotence, tampering and consumer propagation. Run all 46 mandatory suite files / 384 groups / 1302 cases with zero skips and zero failures on native Windows and Linux. Run accumulated T01-T10 checks and independent review. Keep the gate failing until the results establish success.
 
 This decision adds dependency/compile-time cost and a maintained six-file backend patch. If the resource association or regex choice is wrong, qualification and downstream consumer tests must fail before tool migration. Remove the corrections when a pinned upstream implementation provides equivalent behavior and passes the same gates. It does not authorize T11+, a protocol revision change, publication or README work.

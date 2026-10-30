@@ -1,6 +1,6 @@
 # Specification 001: A dependable native stdio integration
 
-- Status: Runtime T01-T19 implemented and reviewed; T20 named-host evidence recorded; M1 acceptance incomplete (AC-08 README pending)
+- Status: Runtime T01-T19 implemented and reviewed; T20 named-host evidence recorded; M1 acceptance evidence complete for the selected profile; README clean-checkout reproduction recorded; release unpublished
 - Created: 2026-10-25
 - Milestone: M1, the first verified native stdio server integration
 - Decision: [ADR-001](../../docs/decisions/0001-product-and-protocol.md)
@@ -29,7 +29,7 @@ An independent client launches the executable, negotiates `2025-11-25`, discover
 
 ## Selected protocol profile
 
-The normative target is **MCP `2025-11-25`**. This is a dated profile, not a claim to implement every optional MCP feature. T01-T19 implement and test the rows below on the declared CI toolchains. The named-host walkthrough is recorded; full milestone acceptance still requires README reproduction; see the [verification record](../../docs/verification/m1.md).
+The normative target is **MCP `2025-11-25`**. This is a dated profile, not a claim to implement every optional MCP feature. T01-T19 implement and test the rows below on the declared CI toolchains. The named-host walkthrough is recorded; README reproduction is recorded separately; see the [verification record](../../docs/verification/m1.md).
 
 | Area | M1 scope | Explicit limit |
 |---|---|---|
@@ -76,7 +76,7 @@ For AC-06, use the official TypeScript client in legacy mode with its supported 
 
 The [verification record](../../docs/verification/m1.md) provides reproduced clean-checkout/reference/consumer commands, exact hosted toolchains, source attribution and CI links. [Migration guidance](../../docs/migration/v0.2-to-m1.md) documents the typed text-only handlers, removed reverse server requests, lifetime and cooperative shutdown.
 
-At source `1fa654be73d582e9ae4778da0d757e9112a6bac1`, all four hosted jobs pass: Windows 118/118; Linux functional, separate ASan+UBSan and TSan each 117/117. Four intentional hosted negative controls verify unit/schema/consumer/interop gate failures. These results satisfy the recorded runtime/CI scope. The Inspector transcript additionally supplies named-host evidence; README acceptance remains pending. The assessed `22c2126` baseline contained only three serialization cases and remains historical evidence.
+At source `1fa654be73d582e9ae4778da0d757e9112a6bac1`, all four hosted jobs pass: Windows 118/118; Linux functional, separate ASan+UBSan and TSan each 117/117. Four intentional hosted negative controls verify unit/schema/consumer/interop gate failures. These results satisfy the recorded runtime/CI scope. The Inspector transcript additionally supplies named-host evidence; [README acceptance evidence is recorded](../../docs/verification/readme-2026-10-29.md). The assessed `22c2126` baseline contained only three serialization cases and remains historical evidence.
 
 ## Project structure and code conventions
 
@@ -105,4 +105,4 @@ Use Catch2 for public-boundary behavior and protocol fixtures. Add subprocess te
 
 M1 excludes a general agent framework, model hosting, cloud deployment, HTTP/OAuth, universal GUI integration, C++20 fallback, dual-era support and performance superiority claims.
 
-T01-T19 implementation and reviewed CI evidence now exist. T20's Inspector Web 2.12.0 walkthrough was performed manually by the user in Edge after automated browser access was denied; its exported transcript is recorded in the verification page. T21's supporting documentation has a reproduced Windows reference/consumer flow; the user explicitly deferred README edits and its acceptance check. Keep the milestone incomplete until AC-08 has its required README evidence. No release publication or universal host compatibility follows from this update.
+T01-T19 implementation and reviewed CI evidence now exist. T20's Inspector Web 2.12.0 walkthrough was performed manually by the user in Edge after automated browser access was denied; its exported transcript is recorded in the verification page. T21's supporting documentation has a reproduced Windows reference/consumer flow; the user subsequently authorized README completion, and its [clean-checkout reproduction](../../docs/verification/readme-2026-10-29.md) now supplies AC-08 evidence. No release publication or universal host compatibility follows from this update.

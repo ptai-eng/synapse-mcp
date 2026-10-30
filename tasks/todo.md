@@ -1,6 +1,6 @@
 # M1 TDD Task Checklist
 
-Status: T01-T20 are complete and reviewed; the thorough [T11-T15 audit](audit-t11-t15.md) also passed final Windows/Ubuntu verification; see [checkpoint-t10.md](checkpoint-t10.md), [checkpoint-t12.md](checkpoint-t12.md), [checkpoint-t15.md](checkpoint-t15.md), [checkpoint-t17.md](checkpoint-t17.md) and [execution.md](execution.md) for local verification and decisions. T19 hosted qualification is recorded in [checkpoint-t19.md](checkpoint-t19.md); T20 named-host evidence is recorded in [checkpoint-t20.md](checkpoint-t20.md); the authorized non-README T21 slice is complete ([checkpoint](checkpoint-t21.md)). The user reaffirmed README deferral; the authorized T01-T21 foundation scope is complete ([final handoff](checkpoint-m1-foundation.md)). README/AC-08 and release publication remain outside this completed scope. Do not mark a task complete from document review alone.
+Status (2026-10-30): T01-T21 implementation and acceptance evidence are complete for the selected M1 profile. The [README reproduction](../docs/verification/readme-2026-10-29.md) closes AC-08; the [runtime recheck](../docs/verification/recheck-2026-10-29.md) and [verification record](../docs/verification/m1.md) retain platform and security limits. Release publication remains separate work.
 
 Every task follows RED -> observed failure -> minimal implementation -> GREEN/regression -> review/commit. New Catch2 cases use the `M1.<area>.<behavior>` names below; test discovery prepends `synapse.`. `ctest --test-dir build/m1 --output-on-failure -R '^synapse\.M1\.<area>\.'` is the targeted command after that task creates its cases. Build before each run. Commit only the task's named paths with a short semantic message.
 
@@ -210,26 +210,26 @@ Depends: T19. Files (2): `tests/interop/inspector-config.mjs`, `docs/verificatio
 
 ## T21: Publish truthful repository documentation
 
-User scope update (2026-10-29): complete the four non-README documents now. README.md remains unchanged until the user authorizes it after revisiting T20. Do not mark all T21 or M1 acceptance complete from this partial slice.
+Current scope (2026-10-30): README completion was authorized and reproduced from a fresh checkout on 2026-10-29. The supporting-documentation checkpoint below retains the earlier partial-scope history.
 
-Authorized slice complete: [checkpoint-t21.md](checkpoint-t21.md). Migration, third-party notices, verification evidence and spec status passed focused reproduction and independent review. T20 named-host acceptance is now complete. The original full-task checklist below retains the deferred README requirements; it is not the current user-authorized scope.
+Authorized slice complete: [checkpoint-t21.md](checkpoint-t21.md). Migration, third-party notices, verification evidence and spec status passed focused reproduction and independent review. T20 named-host acceptance is now complete. The full-task checklist below now includes the completed README reproduction.
 
-Current authorized slice (README excluded):
+Previously completed supporting-documentation slice:
 
 - [x] Migration/API/lifetime/shutdown guidance documented and reviewed.
 - [x] Dependency versions, schema corrections and licensing notices documented and reviewed.
 - [x] Verification record includes qualified CI and actual named-host transcript.
-- [x] Specification and task status distinguish implemented foundation from deferred README acceptance.
+- [x] Specification and task status link implemented foundation to the completed README acceptance evidence.
 
-Original full-task requirements, including deferred README:
+Full-task requirements, now including README:
 
 Depends: T20 and all checkpoint evidence. Files (5): `README.md`, `docs/migration/v0.2-to-m1.md`, `docs/third-party.md`, `docs/verification/m1.md`, `specs/001-native-stdio-foundation/spec.md`.
 
-- [ ] RED: audit README commands against a clean checkout/consumer and every capability claim against AC-01 through AC-08; missing evidence must remain pending.
-- [ ] Reproduce installation/build/reference flow with the documented commands, including spaces in the checkout/binary path.
-- [ ] Document the text-only API, removed server reverse requests, state/transport lifetime, cooperative shutdown, qualified dependency correction/licenses and exact verified platforms/host. Mark the spec implemented only when all gates pass.
-- [ ] GREEN: all acceptance links, commands and local Markdown links verify; full regression and reviewed diff. No performance claim or release publication is implied.
-- [ ] Review and commit `docs: document the verified M1 contract`.
+- [x] RED: audit README commands against a clean checkout/consumer and every capability claim against AC-01 through AC-08; missing evidence must remain pending.
+- [x] Reproduce installation/build/reference flow with the documented commands, including spaces in the checkout/binary path.
+- [x] Document the text-only API, removed server reverse requests, state/transport lifetime, cooperative shutdown, qualified dependency correction/licenses and exact verified platforms/host. Mark the spec implemented only when all gates pass.
+- [x] GREEN: all acceptance links, commands and local Markdown links verify; full regression and reviewed diff. No performance claim or release publication is implied.
+- [x] Review and commit `docs: document the verified M1 contract`.
 
 ## Checkpoint record
 
@@ -238,4 +238,4 @@ Depends: T20 and all checkpoint evidence. Files (5): `README.md`, `docs/migratio
 - [x] I/O: T07-T09 evidence reviewed on both supported platforms.
 - [x] Methods: T10-T14 evidence reviewed.
 - [x] Reference/interop: T15-T18 evidence reviewed.
-- [ ] Release evidence: T19-T21 meet every acceptance criterion; unavailable checks remain explicit blockers to their support claims.
+- [x] Release evidence: T19-T21 meet every acceptance criterion; unavailable checks remain explicit blockers to their support claims.

@@ -1,5 +1,7 @@
 # Foundation handoff: T01-T21 authorized scope
 
+Update 2026-10-30: the user authorized README completion on 2026-10-29. The final README reference/consumer/extracted sample and official-client flow passed from a fresh pinned checkout; see [README reproduction](../docs/verification/readme-2026-10-29.md). AC-08 is satisfied for the documented Windows flow. The earlier deferral below is historical. Release/version selection and publication remain separate work.
+
 Date: 2026-10-29. T01-T20 and the user-authorized non-README portion of T21 are complete and reviewed. The user reaffirmed that README should wait and will create any release later. README/AC-08 therefore remains a separate deferred acceptance gate; this handoff does not declare the original full M1 acceptance complete.
 
 | Scope | Reviewed evidence |

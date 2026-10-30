@@ -1,6 +1,6 @@
 # ADR-002: Owned stdio work and cooperative shutdown
 
-- Status: Runtime, text methods, native reference and T01-T20 verification implemented; supporting T21 documentation reviewed; README/AC-08 deferred
+- Status: Runtime, text methods, native reference and T01-T20 verification implemented; supporting T21 documentation reviewed; README reproduction recorded separately; no release published
 - Date: 2026-10-25
 - Implementation checkpoint: [T10 review record](../../tasks/checkpoint-t10.md), 2026-10-26
 - Scope: [M1 native stdio specification](../../specs/001-native-stdio-foundation/spec.md)
@@ -128,4 +128,4 @@ The implementation tasks must prove:
 - Repeated start/stop/destruction has no leaked descriptors/handles or worker access after owner destruction.
 - Rate, queue, output and policy rejection produce their declared channels; API errors are not accidentally serialized as wire errors.
 
-This record selects the contract. Passing those tests and the M1 interoperability gates is still implementation work.
+This record selects the contract. These runtime and interoperability gates now have passing evidence in the [verification record](../verification/m1.md); the [README reproduction](../verification/readme-2026-10-29.md) records the public instructions separately.

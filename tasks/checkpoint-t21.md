@@ -1,5 +1,7 @@
 # T21 supporting-documentation checkpoint
 
+Update 2026-10-30: the user authorized README completion on 2026-10-29. The final README reference/consumer/extracted sample and official-client flow passed from a fresh pinned checkout; see [README reproduction](../docs/verification/readme-2026-10-29.md). AC-08 is satisfied for the documented Windows flow. The earlier deferral below is historical. Release/version selection and publication remain separate work.
+
 Date: 2026-10-29. Status: the user-authorized non-README slice is complete and independently approved. The latest user scope excludes README; all authorized T21 supporting-documentation work is complete. Full original M1 acceptance still includes deferred README/AC-08.
 
 ## Delivered scope
